@@ -1,0 +1,9 @@
+#!/bin/bash
+if [[ "$PATH" == */usr/local/mysql/bin*  ]]; then
+  echo "Your path is correctly set"
+else
+  echo "Your path is missing /usr/local/mysql/bin, you might want to add it."
+fi
+conda activate /opt/anaconda3/envs/manu
+
+

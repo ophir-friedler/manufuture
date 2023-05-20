@@ -1,0 +1,2 @@
+,id,post_id,status,project,agency,bids,chosen_bids,doc_sl,doc_sf,doc_ml,doc_mf,doc_int,chosen_quote,doc_xls,competing_manufacturers,winning_manufacturers,num_candidates,is_bid_chosen
+346,369,25525,active,25003,12796,"[25524,25530]",25530,25722,,,,,s-f,,"['15212', '5011']",['5011'],2,True

@@ -2,8 +2,8 @@ import logging
 
 import pandas as pd
 
-from config.config import COUNTRY_TO_ISO_MAP
-from utils import util_functions
+from manu_python.config.config import COUNTRY_TO_ISO_MAP
+from manu_python.utils import util_functions
 
 
 # Builds all_tables_df['bids'] dataframe:
@@ -114,6 +114,7 @@ def pam_filter_by_project_requirements(all_tables_df, pam_table_name):
 
 def pam_label_by_project_requirements(all_tables_df, pam_table_name):
     new_table_name: str = pam_table_name + '_label_reqs'
+    # print("Writing " + new_table_name)
     # for efficiency
     if new_table_name not in all_tables_df:
         start_table = all_tables_df[pam_table_name]

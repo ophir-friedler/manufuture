@@ -1,9 +1,13 @@
 import pandas as pd
 
-from data_pipelines.table_builder import user_to_entity_rel
-from utils import util_functions
-
 import logging
+
+from manu_python.utils import util_functions
+from manu_python.utils.util_functions import parse_list_of_integers
+
+
+def empty_def_cause_importing_acts_stupid():
+    return None
 
 
 # Enrich wp_quotes:
@@ -14,9 +18,6 @@ import logging
 # is_bid_chosen: boolean - is a bid selected by the customer
 # competing_manufacturers: Competing manufacturers
 # winning_manufacturers: Winning manufacturers
-from utils.util_functions import parse_list_of_integers
-
-
 def enrich_wp_quotes(all_tables_df):
     logging.info("Enriching wp_quotes with: competing_manufacturers, num_candidates, is_bid_chosen ")
 
@@ -106,21 +107,24 @@ def enrich_wp_manufacturers(all_tables_df):
 
     # Parse creation date year month day
     df = util_functions.add_columns_year_month_day_from_datetime(df,
-                                                            columns_prefix='manufacturer_creation_date',
-                                                            datetime_column='manufacturer_creation_date')
+                                                                 columns_prefix='manufacturer_creation_date',
+                                                                 datetime_column='manufacturer_creation_date')
 
     all_tables_df['wp_manufacturers'] = df
 
     user_to_entity_rel = all_tables_df['user_to_entity_rel']
-    user_to_manuf_status = user_to_entity_rel[user_to_entity_rel['user_type'] == 'manufacturer'][['user_type_post_id', 'user_type_status']]
+    user_to_manuf_status = user_to_entity_rel[user_to_entity_rel['user_type'] == 'manufacturer'][
+        ['user_type_post_id', 'user_type_status']]
+
     def has_vendor(group):
         user_type_status_set = set(group['user_type_status'].unique())
         if 'vendor' in user_type_status_set:
-            return pd.Series(['vendor']) # pd.DataFrame([])
+            return pd.Series(['vendor'])  # pd.DataFrame([])
         if 'pending_vendor' in user_type_status_set:
-            return pd.Series([ 'pending_vendor']) # pd.DataFrame([])
+            return pd.Series(['pending_vendor'])  # pd.DataFrame([])
 
-    manuf_to_status = user_to_manuf_status.groupby('user_type_post_id').apply(lambda group: has_vendor(group)).reset_index()
+    manuf_to_status = user_to_manuf_status.groupby('user_type_post_id').apply(
+        lambda group: has_vendor(group)).reset_index()
     manuf_to_status.columns = ['post_id', 'vendor_status']
 
     df = pd.merge(all_tables_df['wp_manufacturers'], manuf_to_status, how='left', left_on='post_id',
@@ -174,13 +178,13 @@ def enrich_wp_projects(all_tables_df):
 
     # Parse project_creation_date year month day
     df = util_functions.add_columns_year_month_day_from_datetime(df,
-                                                            columns_prefix='project_creation_date',
-                                                            datetime_column='project_creation_date')
+                                                                 columns_prefix='project_creation_date',
+                                                                 datetime_column='project_creation_date')
 
     # Parse approval_date year month day
     df = util_functions.add_columns_year_month_day_from_datetime(df,
-                                                            columns_prefix='approval_date',
-                                                            datetime_column='approval_date')
+                                                                 columns_prefix='approval_date',
+                                                                 datetime_column='approval_date')
 
     # Add num days from creation to approval
     df['num_days_from_creation_to_approval'] = df.apply(
@@ -188,10 +192,12 @@ def enrich_wp_projects(all_tables_df):
                                                      end_date=row['approval_date']), axis=1)
 
     # Add number of distinct parts
-    df['num_distinct_parts'] = df.apply(lambda row: len(row['parts'].split(",")) if row['parts'] is not None else 0, axis=1)
+    df['num_distinct_parts'] = df.apply(lambda row: len(row['parts'].split(",")) if row['parts'] is not None else 0,
+                                        axis=1)
 
     # Bin number of distinct parts
-    df['num_distinct_parts_binned'] = df.apply(lambda row: bin_feature(row['num_distinct_parts'], [1, 4, 11, 20]), axis=1)
+    df['num_distinct_parts_binned'] = df.apply(lambda row: bin_feature(row['num_distinct_parts'], [1, 4, 11, 20]),
+                                               axis=1)
 
     # Add total number of parts
     # Create a dictionary to map part IDs to their quantities
@@ -209,7 +215,8 @@ def enrich_wp_projects(all_tables_df):
     df['total_quantity_of_parts'] = df.apply(calculate_total_quantity_of_parts, axis=1, args=(parts_dict,))
 
     # bin total_quantity_of_parts
-    df['total_quantity_of_parts_binned'] = df.apply(lambda row: bin_feature(row['total_quantity_of_parts'], [0, 1, 10, 30, 100, 200]), axis=1)
+    df['total_quantity_of_parts_binned'] = df.apply(
+        lambda row: bin_feature(row['total_quantity_of_parts'], [0, 1, 10, 30, 100, 200]), axis=1)
 
     all_tables_df['wp_projects'] = df
 
@@ -225,10 +232,10 @@ def enrich_wp_projects(all_tables_df):
 def bin_feature(feature_value, bins_arr):
     bins_arr.sort()
     if feature_value < bins_arr[0]:
-        return  "<" + str(bins_arr[0])
-    for idx, bin_upper_bound in enumerate(bins_arr) :
+        return "<" + str(bins_arr[0])
+    for idx, bin_upper_bound in enumerate(bins_arr):
         if feature_value < bin_upper_bound:
-            return "[" + str(bins_arr[idx-1]) + "-" + str(bins_arr[idx]) + ")"
+            return "[" + str(bins_arr[idx - 1]) + "-" + str(bins_arr[idx]) + ")"
     if feature_value >= bins_arr[-1]:
         return ">=" + str(bins_arr[-1])
 
@@ -246,4 +253,3 @@ def enrich_all(all_tables_df):
     add_is_bid_chosen_to_bids_df(all_tables_df)
     enrich_wp_manufacturers(all_tables_df)
     enrich_wp_projects(all_tables_df)
-

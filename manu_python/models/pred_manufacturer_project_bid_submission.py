@@ -8,7 +8,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 
 
-from data_pipelines import table_builder
+from manu_python.data_pipelines import table_builder
 
 MIN_NUM_MANUFACTURER_BIDS = 4
 
@@ -76,20 +76,20 @@ class BidSubmissionPredictor:
     ]
     _doubles = [
         ['post_id_manuf', 'plan']
-       , ['post_id_manuf', 'req_sheet_metal_inserts']
-       , ['post_id_manuf', 'req_sheet_metal']
-       , ['post_id_manuf', 'one_manufacturer']
-       , ['post_id_manuf', 'num_distinct_parts_binned']
-       , ['post_id_manuf', 'total_quantity_of_parts_binned']
-       , ['sheet_metal_weldings', 'sheet_metal_punching']
+        , ['post_id_manuf', 'req_sheet_metal_inserts']
+        , ['post_id_manuf', 'req_sheet_metal']
+        , ['post_id_manuf', 'one_manufacturer']
+        , ['post_id_manuf', 'num_distinct_parts_binned']
+        , ['post_id_manuf', 'total_quantity_of_parts_binned']
+        , ['sheet_metal_weldings', 'sheet_metal_punching']
     ]
 
     _all_training_features = []
 
     def __str__(self):
         ret_str = "_input_table_name: " + self._input_table_name + '\n' + " _label_column: " + self._label_column \
-            + " _training_table_name: " + self._training_table_name \
-            + " _model: " + str(self._model)
+                  + " _training_table_name: " + self._training_table_name \
+                  + " _model: " + str(self._model)
         return ret_str
 
     def _validate_configuration(self):
@@ -119,9 +119,9 @@ class BidSubmissionPredictor:
             if verbose:
                 print("Training data table name: " + self._training_table_name)
             self.train_bid_submission_predictor(training_data=all_tables_df[self._training_table_name],
-                                                              label_column=self._label_column,
-                                                              model_type=model_type,
-                                                              verbose=verbose)
+                                                label_column=self._label_column,
+                                                model_type=model_type,
+                                                verbose=verbose)
             return self._model
 
     def get_all_double_feature_names(self):
@@ -171,7 +171,7 @@ class BidSubmissionPredictor:
                 self._model = lr_model
                 self._is_model_trained = True
                 self._fit_predict_columns = X_train.columns
-            elif model_type == 'deep_v0': # Create deep model using Keras
+            elif model_type == 'deep_v0':  # Create deep model using Keras
                 model = Sequential()
                 model.add(Dense(64, activation='relu', input_dim=len(X_train.columns)))
                 model.add(Dense(32, activation='relu'))
@@ -187,7 +187,6 @@ class BidSubmissionPredictor:
                 self._model = model
                 self._is_model_trained = True
                 self._fit_predict_columns = X_train.columns
-
 
     def predict_on_proj_manuf(self, all_tables_df, project_id, manufacturer_id, verbose=False):
         if self._is_model_trained is True:
@@ -272,7 +271,8 @@ class BidSubmissionPredictor:
         project_ids = set(all_tables_df[self._input_table_name]['post_id_project'])
         ret_df = pd.DataFrame()
         for project_id in project_ids:
-            ret_df = pd.concat([ret_df, self.rank_manufacturers_for_project(all_tables_df, project_id).head(max_num_recommendations)])
+            ret_df = pd.concat(
+                [ret_df, self.rank_manufacturers_for_project(all_tables_df, project_id).head(max_num_recommendations)])
         ret_df.to_csv(csv_filename)
 
     def rank_for_all_project_features_to_csv(self, all_tables_df, max_recommendations,
@@ -288,7 +288,9 @@ class BidSubmissionPredictor:
                 print(project_features_map)
             _, predict_rows = self.rank_manufacturers_for_project_features(all_tables_df, project_features_map)
 
-            predict_rows = self.add_manufacturers_columns_to_predict_rows(all_tables_df, predict_rows, ['manufacturer_name', 'manufacture_country', 'vendor_status'])
+            predict_rows = self.add_manufacturers_columns_to_predict_rows(all_tables_df, predict_rows,
+                                                                          ['manufacturer_name', 'manufacture_country',
+                                                                           'vendor_status'])
 
             if should_filter_out_pending_vendors:
                 predict_rows = predict_rows[predict_rows['vendor_status'] != 'pending_vendor']

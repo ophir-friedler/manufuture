@@ -28,6 +28,9 @@ def clean_wp_parts(all_tables_df):
     # Replace empty strings with NaN values in the 'quantity' column and then fill with zeros
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
 
+    # Expand machining process
+    df = pd.concat([df, pd.get_dummies(df['machining_process'])], axis=1)
+
     all_tables_df['wp_parts'] = df
     return all_tables_df
 

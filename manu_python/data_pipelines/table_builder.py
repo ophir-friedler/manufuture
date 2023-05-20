@@ -6,6 +6,16 @@ from manu_python.config.config import COUNTRY_TO_ISO_MAP
 from manu_python.utils import util_functions
 
 
+def get_wp_tables_by_post_type(all_tables_df):
+    all_post_types = list(all_tables_df['wp_posts']['post_type'].unique())
+    wp_posts = all_tables_df['wp_posts']
+    wp_postmeta = all_tables_df['wp_postmeta']
+    for post_type in all_post_types:
+        post_type_ids_list = list(wp_posts[wp_posts['post_type'] == post_type]['ID'])
+        wp_postmeta_post_type = wp_postmeta[(wp_postmeta['post_id'].isin(post_type_ids_list)) & (wp_postmeta['meta_key'].str[0] != '_')]
+        all_tables_df['wp_type_' + post_type] = wp_postmeta_post_type.pivot(index='post_id', columns='meta_key', values='meta_value').reset_index()# .drop(columns=['meta_key'])
+
+
 # Builds all_tables_df['bids'] dataframe:
 # Dependencies: all_tables_df['wp_postmeta'], all_tables_df['wp_posts']
 def bids(all_tables_df):

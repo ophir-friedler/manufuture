@@ -35,7 +35,7 @@ def get_all_bid_ids(all_tables_df):
     return util_functions.get_all_bid_ids(all_tables_df)
 
 
-def set_logging_level(level):
-    logging.basicConfig(level=level)
+def set_logging_level_to_info():
+    logging.basicConfig(level=logging.INFO)
 
 

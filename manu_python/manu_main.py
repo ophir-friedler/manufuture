@@ -5,7 +5,7 @@ from db_ops.db_module import build_all_tables_df
 from utils import data_cleaning, util_functions
 
 LABEL_COLUMN_NAME = 'is_manuf_bid'
-
+NEW_BRANCH=100
 
 def get_all_tables_df():
     # Execute data pipelines

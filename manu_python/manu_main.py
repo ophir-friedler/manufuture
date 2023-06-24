@@ -1,8 +1,8 @@
 import logging
 
-from data_pipelines import table_builder, enrichers, aggregators, validators
-from db_ops.db_module import build_all_tables_df
-from utils import data_cleaning, util_functions
+from manu_python.data_pipelines import table_builder, enrichers, aggregators, validators
+from manu_python.db_ops.db_module import build_all_tables_df
+from manu_python.utils import data_cleaning, util_functions
 
 LABEL_COLUMN_NAME = 'is_manuf_bid'
 
@@ -10,9 +10,9 @@ LABEL_COLUMN_NAME = 'is_manuf_bid'
 def get_all_tables_df():
     # Execute data pipelines
     all_tables_df = build_all_tables_df()
+    table_builder.get_wp_tables_by_post_type(all_tables_df)
     data_cleaning.clean_tables(all_tables_df)
     table_builder.bids(all_tables_df)
-    table_builder.get_wp_tables_by_post_type(all_tables_df)
     table_builder.user_to_entity_rel(all_tables_df)
 
     enrichers.enrich_all(all_tables_df)

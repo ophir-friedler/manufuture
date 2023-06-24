@@ -1,4 +1,7 @@
+import logging
+
 import pandas as pd
+from phpserialize import dict_to_list, loads
 
 
 # Clean wp_manufacturers
@@ -36,21 +39,44 @@ def clean_wp_parts(all_tables_df):
 
 
 # wp_quotes cleaning:
-def clean_wp_quotes(all_tables_df):
+def clean_quotes_tables(all_tables_df):
     # Remove Avsha's test-agency (216)
     # Remove Ben's test-agency (439)
     test_agencies = ["216", "439"]
-    df = all_tables_df['wp_quotes']
-    # Fill Nones in empty chosen_bids
-    df['chosen_bids'] = df['chosen_bids'].apply(
-        lambda chosen_bids: None if (chosen_bids != None and len(chosen_bids) == 0) else chosen_bids)
-    df = df.drop(df[df['agency'].isin(test_agencies)].index)
-    all_tables_df['wp_quotes'] = df
+    for table_name in ['wp_quotes', 'wp_type_quote']:
+        logging.warning('table_name:' + table_name)
+        df = all_tables_df[table_name]
+        # Fill Nones in empty chosen_bids
+        df['chosen_bids'] = df['chosen_bids'].apply(
+            lambda chosen_bids: None if (chosen_bids is None or chosen_bids != chosen_bids or str(chosen_bids) == "") else chosen_bids)
+        df = df.drop(df[df['agency'].isin(test_agencies)].index)
+        all_tables_df[table_name] = df
     return all_tables_df
+
+
+table_column_pairs_containing_arrays = [('wp_type_quote', 'bids'), ('wp_type_quote', 'chosen_bids')]
+
+
+def digit_array_of_digits_transform(digit_or_string):
+    if digit_or_string is None or (isinstance(digit_or_string, str) and len(digit_or_string) == 0):
+        return []
+    if digit_or_string.isdigit():
+        return digit_or_string
+    if isinstance(digit_or_string, str):
+        return [int(x) for x in dict_to_list(loads(str.encode(digit_or_string)))]
+    logging.error("Should not ever reach nere, parsing error in some table, column")
+
+
+def clean_wp_type_tables(all_tables_df):
+    for table, column in table_column_pairs_containing_arrays:
+        all_tables_df[table][column] = all_tables_df[table][column].apply(digit_array_of_digits_transform)
+
+                # [int(x) for x in dict_to_list(loads(b'a:2:{i:0;s:5:"14874";i:1;s:5:"15001";}'))]
 
 
 def clean_tables(all_tables_df):
     clean_wp_manufacturers(all_tables_df)
-    clean_wp_quotes(all_tables_df)
+    clean_quotes_tables(all_tables_df)
     clean_wp_parts(all_tables_df)
+    clean_wp_type_tables(all_tables_df)
 

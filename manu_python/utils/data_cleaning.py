@@ -1,4 +1,5 @@
 import logging
+import math
 
 import pandas as pd
 from phpserialize import dict_to_list, loads
@@ -38,19 +39,29 @@ def clean_wp_parts(all_tables_df):
     return all_tables_df
 
 
-# wp_quotes cleaning:
-def clean_quotes_tables(all_tables_df):
+def get_bids_from_row(bids_from_row) -> list:
+    if bids_from_row is None:
+        return []
+    if isinstance(bids_from_row, list):
+        return bids_from_row
+    if bids_from_row.isdigit():
+        return [int(bids_from_row)]
+    if isinstance(bids_from_row, str):
+        if len(bids_from_row.strip()) == 0:
+            return []
+        bids_split = bids_from_row[1:-1].split(",")
+        return [int(bid) for bid in bids_split]
+
+
+# quotes cleaning:
+def clean_quotes_table(all_tables_df):
     # Remove Avsha's test-agency (216)
     # Remove Ben's test-agency (439)
-    test_agencies = ["216", "439"]
-    for table_name in ['wp_quotes', 'wp_type_quote']:
-        logging.warning('table_name:' + table_name)
-        df = all_tables_df[table_name]
-        # Fill Nones in empty chosen_bids
-        df['chosen_bids'] = df['chosen_bids'].apply(
-            lambda chosen_bids: None if (chosen_bids is None or chosen_bids != chosen_bids or str(chosen_bids) == "") else chosen_bids)
-        df = df.drop(df[df['agency'].isin(test_agencies)].index)
-        all_tables_df[table_name] = df
+    df = all_tables_df['wp_type_quote']
+    df = df.drop(df[df['agency'].isin(["216", "439"])].index)
+    df['bids'] = df['bids'].apply(get_bids_from_row)
+    df['chosen_bids'] = df['chosen_bids'].apply(get_bids_from_row)
+    all_tables_df['wp_type_quote'] = df
     return all_tables_df
 
 
@@ -58,7 +69,9 @@ table_column_pairs_containing_arrays = [('wp_type_quote', 'bids'), ('wp_type_quo
 
 
 def digit_array_of_digits_transform(digit_or_string):
-    if digit_or_string is None or (isinstance(digit_or_string, str) and len(digit_or_string) == 0):
+    if (digit_or_string is None) or \
+            (isinstance(digit_or_string, float) and math.isnan(digit_or_string)) or \
+            (isinstance(digit_or_string, str) and len(digit_or_string) == 0):
         return []
     if digit_or_string.isdigit():
         return digit_or_string
@@ -71,12 +84,11 @@ def clean_wp_type_tables(all_tables_df):
     for table, column in table_column_pairs_containing_arrays:
         all_tables_df[table][column] = all_tables_df[table][column].apply(digit_array_of_digits_transform)
 
-                # [int(x) for x in dict_to_list(loads(b'a:2:{i:0;s:5:"14874";i:1;s:5:"15001";}'))]
-
 
 def clean_tables(all_tables_df):
-    clean_wp_manufacturers(all_tables_df)
-    clean_quotes_tables(all_tables_df)
-    clean_wp_parts(all_tables_df)
     clean_wp_type_tables(all_tables_df)
+    clean_wp_manufacturers(all_tables_df)
+    clean_quotes_table(all_tables_df)
+    clean_wp_parts(all_tables_df)
+
 

@@ -6,11 +6,7 @@ from manu_python.utils import util_functions
 from manu_python.utils.util_functions import parse_list_of_integers
 
 
-def empty_def_cause_importing_acts_stupid():
-    return None
-
-
-# Enrich wp_quotes:
+# Enrich wp_type_quote:
 # Dependencies: all_tables_df['bids']
 #
 # competing_manufacturers: list of competing manufacturers
@@ -18,58 +14,24 @@ def empty_def_cause_importing_acts_stupid():
 # is_bid_chosen: boolean - is a bid selected by the customer
 # competing_manufacturers: Competing manufacturers
 # winning_manufacturers: Winning manufacturers
-def enrich_wp_quotes(all_tables_df):
-    logging.info("Enriching wp_quotes with: competing_manufacturers, num_candidates, is_bid_chosen ")
+def enrich_wp_type_quote(all_tables_df):
+    logging.info("Enriching wp_type_quote with: competing_manufacturers, num_candidates, is_bid_chosen ")
 
-    def get_bids_from_wp_quotes_row(row):
-        bids = row['bids']
-        if len(bids.strip()) == 0:
-            return []
-        if bids.isdigit():
-            return [int(bids)]
-        bids_split = bids[1:-1].split(",")
-        return [int(bid) for bid in bids_split]
+    def get_manufacturers_of_bids(bids: list) -> list:
+        bids_df = all_tables_df['wp_type_bid']
+        return [x for x in list(bids_df[bids_df['post_id'].isin(bids)]['manufacturer']) if x is not None and len(x) > 0]
 
-    def get_chosen_bids_from_wp_quotes_row(row):
-        chosen_bids = row['chosen_bids']
-        if (chosen_bids is None) or (len(chosen_bids.strip()) == 0):
-            return []
-        if chosen_bids.isdigit():
-            return [int(chosen_bids)]
-        bids_split = chosen_bids[1:-1].split(",")
-        return [int(bid) for bid in bids_split]
-
-    def get_the_bidding_manufacturer(bid_post_id):
-        if bid_post_id in all_tables_df['bids'].index:
-            return all_tables_df['bids'].loc[bid_post_id]['manufacturer_id']
-        else:
-            return None
-
-    def competing_manufacturers(wp_quotes_row):
-        bids = get_bids_from_wp_quotes_row(wp_quotes_row)
-        ret_list = [get_the_bidding_manufacturer(bid_post_id) for bid_post_id in bids]
-        ret_list = [x for x in ret_list if x is not None and len(x) > 0]
-        ret_set = set(ret_list)
-        if len(ret_set) != len(ret_list):
-            logging.info("manufacturer bid multiple times: " + str(ret_list) + str(wp_quotes_row))
-        return [x for x in ret_list if x is not None and len(x) > 0]
-
-    def winning_manufacturers(wp_quotes_row):
-        chosen_bids = get_chosen_bids_from_wp_quotes_row(wp_quotes_row)
-        ret_val = [get_the_bidding_manufacturer(bid_post_id) for bid_post_id in chosen_bids]
-        return [x for x in ret_val if x is not None and len(x) > 0]
-
-    df = all_tables_df['wp_quotes']
-    df['competing_manufacturers'] = df.apply(lambda row: competing_manufacturers(row), axis='columns')
-    df['winning_manufacturers'] = df.apply(lambda row: winning_manufacturers(row), axis='columns')
+    df = all_tables_df['wp_type_quote']
+    df['competing_manufacturers'] = df.apply(lambda row: get_manufacturers_of_bids(row['bids']), axis='columns')
+    df['winning_manufacturers'] = df.apply(lambda row: get_manufacturers_of_bids(row['chosen_bids']), axis='columns')
     df['num_candidates'] = df['competing_manufacturers'].apply(len)
-    df['is_bid_chosen'] = all_tables_df['wp_quotes']['chosen_bids'].isnull() == False
+    df['is_bid_chosen'] = df['chosen_bids'].apply(lambda x: len(x) > 0)
     # Translate project id to int:
     df['project'] = df['project'].astype('int64')
-    all_tables_df['wp_quotes'] = df
+    all_tables_df['wp_type_quote'] = df
 
 
-# Dependencies: Enriched wp_quotes, all_tables_df['wp_posts'], all_tables_df['user_to_entity_rel']
+# Dependencies: Enriched wp_type_quote, all_tables_df['wp_posts'], all_tables_df['user_to_entity_rel']
 # participation_count: number of times a manufacturer competed in a quote
 # manufacturer_creation_date: Manufacturer creation date
 # manufacturer_name
@@ -80,7 +42,7 @@ def enrich_wp_manufacturers(all_tables_df):
 
     # manufacturer_id -> participation count
     participation_count = {}
-    for index, row in all_tables_df['wp_quotes'].iterrows():
+    for index, row in all_tables_df['wp_type_quote'].iterrows():
         for manufacturer in row['competing_manufacturers']:
             if len(manufacturer) > 0:
                 participation_count[manufacturer] = participation_count.get(manufacturer, 0) + 1
@@ -140,11 +102,11 @@ def enrich_wp_manufacturers(all_tables_df):
 
 
 # Enrich bids dataframe with 'is_bid_chosen'
-# Dependencies: wp_quotes
+# Dependencies: wp_type_quote
 def add_is_bid_chosen_to_bids_df(all_tables_df):
     # list of post ids of chosen bids
     all_chosen_bid_ids = []
-    df = all_tables_df['wp_quotes']
+    df = all_tables_df['wp_type_quote']
     df[df['is_bid_chosen']]['chosen_bids'].apply(
         lambda bids: util_functions.extend_list_of_bids(all_chosen_bid_ids, bids))
     all_chosen_bid_ids = list(map(int, all_chosen_bid_ids))
@@ -221,7 +183,7 @@ def enrich_wp_projects(all_tables_df):
     all_tables_df['wp_projects'] = df
 
     # Add is_quote_carried_out (1 if it has a wp_quote entry, 0 otherwise)
-    df = all_tables_df['wp_quotes'][['project', 'post_id']].rename(columns={'post_id': 'is_quote_carried_out'})
+    df = all_tables_df['wp_type_quote'][['project', 'post_id']].rename(columns={'post_id': 'is_quote_carried_out'})
     is_quote_carried_out_for_project_df = df.groupby(['project']).count().reset_index()
     df = pd.merge(all_tables_df['wp_projects'], is_quote_carried_out_for_project_df, how='left', left_on='post_id',
                   right_on='project').drop(columns=['project'])  # .rename(columns={'post_id': 'is_quote_carried_out'})
@@ -248,8 +210,13 @@ def wp_projects_add_creation_date(all_tables_df):
     all_tables_df['wp_projects'] = df
 
 
+def enrich_wp_type_bid(all_tables_df):
+    all_tables_df['wp_type_bid']['is_bid_chosen'] = all_tables_df['wp_type_bid']['bid_parts_0_won']
+
+
 def enrich_all(all_tables_df):
-    enrich_wp_quotes(all_tables_df)
+    enrich_wp_type_quote(all_tables_df)
+    enrich_wp_type_bid(all_tables_df)
     add_is_bid_chosen_to_bids_df(all_tables_df)
     enrich_wp_manufacturers(all_tables_df)
     enrich_wp_projects(all_tables_df)

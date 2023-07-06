@@ -1,6 +1,8 @@
 import logging
 import pandas as pd
 
+TABLES_TO_INGORE_IN_SEARCH = ['wp_quotes']
+
 
 def selectAll(table_name, dbConnection):
     return pd.read_sql(f'SELECT * FROM ' + table_name, dbConnection)
@@ -18,18 +20,15 @@ def display_and_return_is_empty(ret_df, print_str):
 def searchPostId(post_id, all_tables_df):
     print("All entries for post_id: " + str(post_id))
     is_empty = True
-    # is_empty = display_and_return_is_empty(all_tables_df['wp_posts'][all_tables_df['wp_posts']['ID'] == post_id],
-    #                                                     "wp_posts: ") and is_empty
     for table_name, table_df in all_tables_df.items():
+        if table_name in TABLES_TO_INGORE_IN_SEARCH:
+            continue
         for post_id_col in ['post_id', 'agency', 'project', 'ID']:
             if post_id_col in table_df.columns:
                 is_empty = display_and_return_is_empty(table_df[table_df[post_id_col] == post_id],
-                                                                    table_name + ": (in column '" + post_id_col + "')") and is_empty
-        for post_id_str_list_col in ['bids']:
-            if post_id_str_list_col in table_df.columns:
-                is_empty = display_and_return_is_empty(table_df[table_df[post_id_str_list_col].str.contains(str(post_id))],
-                                                       table_name + ": (in column '" + post_id_str_list_col + "')") and is_empty
-        for post_id_list_col in ['competing_manufacturers']:
+                                                       table_name + ": (in column '" + post_id_col + "')") and is_empty
+
+        for post_id_list_col in ['competing_manufacturers', 'bids', 'chosen_bids']:
             if post_id_list_col in table_df.columns:
                 is_empty = display_and_return_is_empty(table_df[table_df[post_id_list_col].apply(lambda x: str(post_id) in x)],
                                                        table_name + ": (in column '" + post_id_list_col + "')") and is_empty
@@ -39,12 +38,14 @@ def searchPostId(post_id, all_tables_df):
 
 
 def searchString(str_val, all_tables_df):
-    for key, value in all_tables_df.items():
-        print(key)
-        for colname in list(value.columns):
-            for val in [str(val) for val in all_tables_df[key][colname].astype(str).unique()]:
+    for table_name, table_df in all_tables_df.items():
+        if table_name in TABLES_TO_INGORE_IN_SEARCH:
+            continue
+        print(table_name)
+        for colname in list(table_df.columns):
+            for val in [str(val) for val in all_tables_df[table_name][colname].astype(str).unique()]:
                 if str_val in val:
-                    print("table: " + str(key))
+                    print("table: " + str(table_name))
                     print("   colname: " + str(colname))
                     print("   value: " + str(val))
 
@@ -59,6 +60,9 @@ def parse_list_of_integers(list_of_integers_str):
 
 # extend list_of_bids to contain also bid ids that are in integer_or_list
 def extend_list_of_bids(list_of_bids, integer_or_list):
+    if isinstance(integer_or_list, list):
+        list_of_bids.extend(integer_or_list)
+        return
     if len(integer_or_list) == 0:
         logging.warning("Warning: found an empty entry of bids.")
         return
@@ -70,18 +74,10 @@ def extend_list_of_bids(list_of_bids, integer_or_list):
         list_of_bids.extend(all_bids_in_list)
 
 
-# build all_bid_ids: list of post ids of bids (taken from wp_quotes):
+# build all_bid_ids: list of post ids of bids (taken from wp_type_quote):
 def get_all_bid_ids(all_tables_df):
     all_bid_ids = []
-    all_tables_df['wp_quotes']['bids'].apply(lambda bids: extend_list_of_bids(all_bid_ids, bids))
-    all_bid_ids = set(map(int, all_bid_ids))
-    return all_bid_ids
-
-
-# build all_bid_ids: list of post ids of bids (taken from wp_quotes):
-def get_all_agency_ids(all_tables_df):
-    all_bid_ids = []
-    all_tables_df['wp_posts']['bids'].apply(lambda bids: extend_list_of_bids(all_bid_ids, bids))
+    all_tables_df['wp_type_quote']['bids'].apply(lambda bids: extend_list_of_bids(all_bid_ids, bids))
     all_bid_ids = set(map(int, all_bid_ids))
     return all_bid_ids
 
@@ -107,9 +103,9 @@ def add_date_time_columns(row, columns_prefix, datetime_column):
         row[columns_prefix + '_year_month'] = "0-0"
         row[columns_prefix + '_Ym'] = "0-0"
     else:
-        row[columns_prefix + '_year'] = row[datetime_column].year #.astype(int)
-        row[columns_prefix + '_month'] = row[datetime_column].month #.astype(int)
-        row[columns_prefix + '_day'] = row[datetime_column].day #.astype(int)
+        row[columns_prefix + '_year'] = row[datetime_column].year  # .astype(int)
+        row[columns_prefix + '_month'] = row[datetime_column].month  # .astype(int)
+        row[columns_prefix + '_day'] = row[datetime_column].day  # .astype(int)
         row[columns_prefix + '_year_month'] = (str(row[columns_prefix + '_year']) + "-" + str(row[columns_prefix + '_month']))
         row[columns_prefix + '_Ym'] = pd.to_datetime(row[columns_prefix + '_year_month'], format='%Y-%m').strftime('%Y-%m')
     return row

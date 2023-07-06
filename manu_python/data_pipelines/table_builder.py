@@ -6,14 +6,17 @@ from manu_python.config.config import COUNTRY_TO_ISO_MAP
 from manu_python.utils import util_functions
 
 
+# TODO: join wp_posts data into the wp_type_XXX tables
 def get_wp_tables_by_post_type(all_tables_df):
     all_post_types = list(all_tables_df['wp_posts']['post_type'].unique())
     wp_posts = all_tables_df['wp_posts']
     wp_postmeta = all_tables_df['wp_postmeta']
     for post_type in all_post_types:
-        post_type_ids_list = list(wp_posts[wp_posts['post_type'] == post_type]['ID'])
+        wp_posts_post_type = wp_posts[wp_posts['post_type'] == post_type]
+        post_type_ids_list = list(wp_posts_post_type['ID'])
         wp_postmeta_post_type = wp_postmeta[(wp_postmeta['post_id'].isin(post_type_ids_list)) & (wp_postmeta['meta_key'].str[0] != '_')]
         all_tables_df['wp_type_' + post_type] = wp_postmeta_post_type.pivot(index='post_id', columns='meta_key', values='meta_value').reset_index()# .drop(columns=['meta_key'])
+        all_tables_df['wp_type_' + post_type] = all_tables_df['wp_type_' + post_type].merge(wp_posts_post_type, left_on='post_id', right_on='ID').drop(columns=['ID', 'post_type'])
 
 
 # Builds all_tables_df['bids'] dataframe:
@@ -53,16 +56,16 @@ def bids(all_tables_df):
     all_tables_df['bids'] = df
 
 
-# Dependencies: wp_quotes (enriched), wp_projects, wp_manufacturers
+# Dependencies: wp_type_quote (enriched), wp_projects, wp_manufacturers
 # Builds pm_project_manufacturer
 def pm_project_manufacturer(all_tables_df):
-    # training data + labels are based on wp_quotes
+    # training data + labels are based on wp_type_quote
     # Get all project ids that have quotes
-    wp_quotes = all_tables_df['wp_quotes'][
+    wp_type_quote = all_tables_df['wp_type_quote'][
         ['post_id', 'bids', 'project', 'competing_manufacturers', 'winning_manufacturers']]
     # Join projects features
     wp_projects = all_tables_df['wp_projects']
-    pm_df = wp_quotes.merge(wp_projects, left_on='project', right_on='post_id', suffixes=('_quote', '_project'))
+    pm_df = wp_type_quote.merge(wp_projects, left_on='project', right_on='post_id', suffixes=('_quote', '_project'))
     # For each manufacturer create a project-manufacturer row with data from wp_manufacturers
     wp_manufacturers = all_tables_df['wp_manufacturers'].rename(columns={'post_id': 'post_id_manuf'})
     pm_df = pm_df.merge(wp_manufacturers, how='cross', suffixes=('_quote', '_manuf'))

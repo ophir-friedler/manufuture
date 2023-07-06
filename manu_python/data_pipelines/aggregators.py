@@ -39,10 +39,10 @@ def monthly_manufacturers_stats(all_tables_df):
     all_tables_df['monthly_manufacturers_stats'] = df
 
 
-# Dependencies: Enriched wp_quotes
+# Dependencies: Enriched wp_type_quote
 def stats_by_num_candidates(all_tables_df):
-    df = all_tables_df['wp_quotes'].groupby(['num_candidates', 'is_bid_chosen'])[['id']] \
-        .count().pivot_table('id', ['num_candidates'], 'is_bid_chosen') \
+    df = all_tables_df['wp_type_quote'].groupby(['num_candidates', 'is_bid_chosen'])[['post_id']] \
+        .count().pivot_table('post_id', ['num_candidates'], 'is_bid_chosen') \
         .reset_index().set_index('num_candidates') \
         .rename(columns={True: 'num_quotes_with_chosen_bid', False: 'num_quotes_without_chosen_bid'})
     # Calculate % of success per number of candidates

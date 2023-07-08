@@ -5,28 +5,27 @@ import pandas as pd
 def display_bids_per_month(bids_df, ax, title):
     g_df = bids_df.groupby([bids_df['post_date_Ym']]).count()
     ax.set_title(title)
-    ax.bar(g_df.index, g_df['manufacturer_id'])
+    ax.bar(g_df.index, g_df['manufacturer'])
 
 
 def display_number_of_monthly_bids(all_tables_df, manufacturer_id, ax):
-    df = all_tables_df['bids']
-    manufacturer_bids_df = df[df['manufacturer_id'].apply(str) == str(manufacturer_id)]
+    df = all_tables_df['wp_type_bid']
+    manufacturer_bids_df = df[df['manufacturer'].apply(str) == str(manufacturer_id)]
     display_bids_per_month(manufacturer_bids_df, ax, title="ID: " + str(manufacturer_id) + ", Number of bids")
 
 
 def display_number_of_monthly_chosen_bids(all_tables_df, manufacturer_id, ax):
-    df = all_tables_df['bids']
-    df = df[(df['manufacturer_id'].apply(str) == str(manufacturer_id)) & (df['is_bid_chosen'] == True)]
+    df = all_tables_df['wp_type_bid']
+    df = df[(df['manufacturer'].apply(str) == str(manufacturer_id)) & (df['is_chosen'] == True)]
     display_bids_per_month(df, ax, title="ID: " + str(
         manufacturer_id) + ", Manufacturer bids that were chosen (i.e.: quote wins): ")
 
 
 def display_manufacturer_monthly_success_rate(all_tables_df, manufacturer_id, ax):
-    # Calculate success rate
-    df = all_tables_df['bids']
-    df = df[df['manufacturer_id'].apply(str) == str(manufacturer_id)]
-    df = df.groupby([df['post_date_Ym'], 'is_bid_chosen'])[['post_type']] \
-        .count().pivot_table('post_type', ['post_date_Ym'], 'is_bid_chosen').fillna(0)
+    df = all_tables_df['wp_type_bid']
+    df = df[df['manufacturer'].apply(str) == str(manufacturer_id)]
+    df = df.groupby([df['post_date_Ym'], 'is_chosen'])[['post_id']] \
+        .count().pivot_table('post_id', ['post_date_Ym'], 'is_chosen').fillna(0)
     if df.empty:
         print("Manufacturer " + str(manufacturer_id) + " has no prior bids")
         return
@@ -51,9 +50,9 @@ def manufacturer_dashboard(all_tables_df, manufacturer_id):
 
 
 def display_all_manufacturers_monthly_success_rate(all_tables_df, ax):
-    df = all_tables_df['bids']
-    df = df.groupby([df['post_date_Ym'], 'is_bid_chosen'])[['post_type']] \
-        .count().pivot_table('post_type', ['post_date_Ym'], 'is_bid_chosen').fillna(0)
+    df = all_tables_df['wp_type_bid']
+    df = df.groupby([df['post_date_Ym'], 'is_chosen'])[['post_id']] \
+        .count().pivot_table('post_id', ['post_date_Ym'], 'is_chosen').fillna(0)
     df['success_rate'] = 100 * df[1] / (df[1] + df[0])
     ax.set_title("Monthly total bid success rate (should be replaced with median success rate)")
     ax.bar(df.index, df['success_rate'])
@@ -81,9 +80,9 @@ def manufacturers_high_level_dashboard(all_tables_df):
     axs[0, 0].set_title("New manufacturers")
     axs[0, 0].bar(df.index, df['num_manufacturers'])
 
-    df = all_tables_df['bids']
+    df = all_tables_df['wp_type_bid']
     display_bids_per_month(df, axs[0, 1], title="Num of manufacturer bids")
-    df = df[df['is_bid_chosen'] == True]
+    df = df[df['is_chosen'] == True]
     display_bids_per_month(df, axs[1, 0], title="Num of chosen manufacturer bids")
     display_all_manufacturers_monthly_success_rate(all_tables_df, axs[1, 1])
     display_all_manufacturers_monthly_success_rate_distribution(all_tables_df)

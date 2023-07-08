@@ -53,11 +53,10 @@ def get_bids_from_row(bids_from_row) -> list:
         return [int(bid) for bid in bids_split]
 
 
-# quotes cleaning:
-def clean_quotes_table(all_tables_df):
+def clean_wp_type_quote(all_tables_df):
+    df = all_tables_df['wp_type_quote']
     # Remove Avsha's test-agency (216)
     # Remove Ben's test-agency (439)
-    df = all_tables_df['wp_type_quote']
     df = df.drop(df[df['agency'].isin(["216", "439"])].index)
     df['bids'] = df['bids'].apply(get_bids_from_row)
     df['chosen_bids'] = df['chosen_bids'].apply(get_bids_from_row)
@@ -65,7 +64,8 @@ def clean_quotes_table(all_tables_df):
     return all_tables_df
 
 
-table_column_pairs_containing_arrays = [('wp_type_quote', 'bids'), ('wp_type_quote', 'chosen_bids')]
+def clean_wp_type_bid(all_tables_df):
+    all_tables_df['wp_type_bid']['manufacturer'] = all_tables_df['wp_type_bid']['manufacturer'].astype('int64')
 
 
 def digit_array_of_digits_transform(digit_or_string):
@@ -81,14 +81,15 @@ def digit_array_of_digits_transform(digit_or_string):
 
 
 def clean_wp_type_tables(all_tables_df):
-    for table, column in table_column_pairs_containing_arrays:
+    for table, column in [('wp_type_quote', 'bids'), ('wp_type_quote', 'chosen_bids')]:
         all_tables_df[table][column] = all_tables_df[table][column].apply(digit_array_of_digits_transform)
 
 
 def clean_tables(all_tables_df):
     clean_wp_type_tables(all_tables_df)
     clean_wp_manufacturers(all_tables_df)
-    clean_quotes_table(all_tables_df)
+    clean_wp_type_quote(all_tables_df)
+    clean_wp_type_bid(all_tables_df)
     clean_wp_parts(all_tables_df)
 
 

@@ -1,10 +1,11 @@
-# Dependency: all_tables_df['bids']
+# Dependency: all_tables_df['wp_type_bid']
 def monthly_bid_success_rate_df(all_tables_df):
     # all_tables_df['monthly_bid_success_rate'] - monthly_bid_success_rate: Success rate dataframe
-    bids = all_tables_df['bids']
-    bids_agg = bids.groupby(['post_date_Ym', 'manufacturer_id', 'is_bid_chosen'])[['post_type']] \
-        .count().pivot_table('post_type', ['post_date_Ym', 'manufacturer_id'],
-                             'is_bid_chosen').fillna(0)
+    bids_agg = all_tables_df['wp_type_bid'] \
+        .groupby(['post_date_Ym', 'manufacturer', 'is_chosen'])[['post_id']] \
+        .count() \
+        .pivot_table('post_id', ['post_date_Ym', 'manufacturer'], 'is_chosen') \
+        .fillna(0)
     bids_agg['success_rate'] = 100 * bids_agg[1] / (bids_agg[1] + bids_agg[0])
     bids_agg['total_bids'] = bids_agg[1] + bids_agg[0]
     all_tables_df['monthly_bid_success_rate'] = bids_agg

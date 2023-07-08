@@ -7,7 +7,7 @@ from manu_python.utils.util_functions import parse_list_of_integers
 
 
 # Enrich wp_type_quote:
-# Dependencies: all_tables_df['bids']
+# Dependencies: all_tables_df['wp_type_bid']
 #
 # competing_manufacturers: list of competing manufacturers
 # num_candidates: number of competing manufacturers
@@ -19,7 +19,7 @@ def enrich_wp_type_quote(all_tables_df):
 
     def get_manufacturers_of_bids(bids: list) -> list:
         bids_df = all_tables_df['wp_type_bid']
-        return [x for x in list(bids_df[bids_df['post_id'].isin(bids)]['manufacturer']) if x is not None and len(x) > 0]
+        return [x for x in list(bids_df[bids_df['post_id'].isin(bids)]['manufacturer']) if x is not None]
 
     df = all_tables_df['wp_type_quote']
     df['competing_manufacturers'] = df.apply(lambda row: get_manufacturers_of_bids(row['bids']), axis='columns')
@@ -44,14 +44,10 @@ def enrich_wp_manufacturers(all_tables_df):
     participation_count = {}
     for index, row in all_tables_df['wp_type_quote'].iterrows():
         for manufacturer in row['competing_manufacturers']:
-            if len(manufacturer) > 0:
-                participation_count[manufacturer] = participation_count.get(manufacturer, 0) + 1
+            participation_count[manufacturer] = participation_count.get(manufacturer, 0) + 1
 
     participation_count_df = pd.DataFrame(participation_count.items(),
                                           columns=['manufacturer_id', 'participation_count']).astype('int64')
-    # for key, value in participation_count.items():
-    #     participation_count_df = participation_count_df.append(
-    #         {'manufacturer_id': int(key), 'participation_count': int(value)}, ignore_index=True)
 
     df = pd.merge(all_tables_df['wp_manufacturers'], participation_count_df, how='left', left_on='post_id',
                   right_on='manufacturer_id').drop(columns=['manufacturer_id'])
@@ -93,25 +89,6 @@ def enrich_wp_manufacturers(all_tables_df):
                   right_on='post_id')
 
     all_tables_df['wp_manufacturers'] = df
-
-
-# # First manufacturer bid:
-# def first_month_manufacturer_bid(manufacturer_id):
-#     df = all_tables_df['bids']
-#     manufacturer_bids_df = df[df['manufacturer_id'].apply(str) == str(manufacturer_id)]
-
-
-# Enrich bids dataframe with 'is_bid_chosen'
-# Dependencies: wp_type_quote
-def add_is_bid_chosen_to_bids_df(all_tables_df):
-    # list of post ids of chosen bids
-    all_chosen_bid_ids = []
-    df = all_tables_df['wp_type_quote']
-    df[df['is_bid_chosen']]['chosen_bids'].apply(
-        lambda bids: util_functions.extend_list_of_bids(all_chosen_bid_ids, bids))
-    all_chosen_bid_ids = list(map(int, all_chosen_bid_ids))
-    all_tables_df['bids']['is_bid_chosen'] = all_tables_df['bids'].apply(
-        lambda row: 1 if row.name in all_chosen_bid_ids else 0, axis='columns')
 
 
 # Dependencies: all_tables_df['wp_posts'], all_tables_df['wp_parts']
@@ -211,12 +188,17 @@ def wp_projects_add_creation_date(all_tables_df):
 
 
 def enrich_wp_type_bid(all_tables_df):
-    all_tables_df['wp_type_bid']['is_bid_chosen'] = all_tables_df['wp_type_bid']['bid_parts_0_won']
+    all_tables_df['wp_type_bid']['is_chosen'] = all_tables_df['wp_type_bid']['bid_parts_0_won'].apply(lambda x: 1 if str(x) == str(1) else 0)
+    # Parse year month day
+    all_tables_df['wp_type_bid'] = util_functions.add_columns_year_month_day_from_datetime(
+        all_tables_df['wp_type_bid'],
+        columns_prefix='post_date',
+        datetime_column='post_date')
 
 
 def enrich_all(all_tables_df):
     enrich_wp_type_quote(all_tables_df)
     enrich_wp_type_bid(all_tables_df)
-    add_is_bid_chosen_to_bids_df(all_tables_df)
+    # add_is_bid_chosen_to_bids_df(all_tables_df)
     enrich_wp_manufacturers(all_tables_df)
     enrich_wp_projects(all_tables_df)

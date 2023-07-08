@@ -19,43 +19,6 @@ def get_wp_tables_by_post_type(all_tables_df):
         all_tables_df['wp_type_' + post_type] = all_tables_df['wp_type_' + post_type].merge(wp_posts_post_type, left_on='post_id', right_on='ID').drop(columns=['ID', 'post_type'])
 
 
-# Builds all_tables_df['bids'] dataframe:
-# Dependencies: all_tables_df['wp_postmeta'], all_tables_df['wp_posts']
-def bids(all_tables_df):
-    all_bid_ids = util_functions.get_all_bid_ids(all_tables_df)
-    bids_df = pd.DataFrame(data={'post_id': list(all_bid_ids)})
-
-    # Collect data from wp_postmeta
-    df = all_tables_df['wp_postmeta'][['post_id', 'meta_key', 'meta_value']]
-    df = df[df['post_id'].isin(all_bid_ids)]
-
-    bids_in_postmeta_df = df[df['meta_key'] == 'manufacturer'] \
-        .rename(columns={'post_id': 'post_id', 'meta_value': 'manufacturer_id'}) \
-        .drop(columns=['meta_key']) \
-        .reset_index(drop=True)
-
-    all_tables_df['bids'] = pd.merge(bids_df, bids_in_postmeta_df, on="post_id", how="left").fillna('') \
-        .rename(columns={'post_id': 'bid_post_id'}) \
-        .set_index('bid_post_id')
-
-    # Collect data from wp_posts
-    df = all_tables_df['wp_posts'][['ID', 'post_date', 'post_type']]
-    df = df[df['ID'].isin(all_bid_ids)]
-    df = pd.merge(all_tables_df['bids'], df, left_index=True, right_on="ID", how="left") \
-        .rename(columns={'ID': 'bid_post_id'}) \
-        .set_index('bid_post_id')
-
-    # Clean out bids that don't have data (lost/ erased)
-    df = df[df['post_type'].isnull() == False]
-
-    # Parse year month day
-    df = util_functions.add_columns_year_month_day_from_datetime(df,
-                                                                 columns_prefix='post_date',
-                                                                 datetime_column='post_date')
-
-    all_tables_df['bids'] = df
-
-
 # Dependencies: wp_type_quote (enriched), wp_projects, wp_manufacturers
 # Builds pm_project_manufacturer
 def pm_project_manufacturer(all_tables_df):
@@ -74,20 +37,12 @@ def pm_project_manufacturer(all_tables_df):
     standardize_country_values(pm_df)
 
     # build Label column
-    did_manufacturer_bid(training_data=pm_df, label_column='is_manuf_bid')
+    pm_df['is_manuf_bid'] = pm_df.apply(lambda row: 1 if row['post_id_manuf'] in row['competing_manufacturers'] else 0,
+                                        axis='columns')
+
     # set index by project-manufacturer
     pm_df = pm_df.set_index(['post_id_project', 'post_id_manuf'])
     all_tables_df['pm_project_manufacturer'] = pm_df
-
-
-# # Filter out non-participating manufacturers from pm_project_manufacturer
-# # Dependencies: pm_project_manufacturer
-# def pam_project_active_manufacturer(all_tables_df):
-#     pam_df = all_tables_df['pm_project_manufacturer']
-#     manuf_participation_df = pam_df.groupby('post_id_manuf')[['is_manuf_bid']].sum()
-#     list_of_participating_manufs = list(manuf_participation_df[manuf_participation_df['is_manuf_bid'] != 0].index)
-#     pam_df = pam_df[pam_df.index.get_level_values('post_id_manuf').isin(list_of_participating_manufs)]
-#     all_tables_df['pam_project_active_manufacturer'] = pam_df
 
 
 # Dependencies: pam_project_active_manufacturer
@@ -136,15 +91,6 @@ def pam_label_by_project_requirements(all_tables_df, pam_table_name):
         all_tables_df[new_table_name] = start_table.copy()
 
     return new_table_name
-
-
-def did_manufacturer_bid(training_data, label_column):
-    def label_is_manuf_bid(row):
-        competing_manufs = list(map(int, row['competing_manufacturers']))
-        current_manuf = row['post_id_manuf']
-        return 1 if current_manuf in competing_manufs else 0
-
-    training_data[label_column] = training_data.apply(lambda row: label_is_manuf_bid(row), axis='columns')
 
 
 # Build pam + filter by project requirements

@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
 
-TABLES_TO_INGORE_IN_SEARCH = ['wp_quotes']
+TABLES_TO_IGNORE_IN_SEARCH = ['wp_quotes', 'pm_project_manufacturer', 'pam_project_active_manufacturer_th_1']
 
 
 def selectAll(table_name, dbConnection):
@@ -21,7 +21,7 @@ def searchPostId(post_id, all_tables_df):
     print("All entries for post_id: " + str(post_id))
     is_empty = True
     for table_name, table_df in all_tables_df.items():
-        if table_name in TABLES_TO_INGORE_IN_SEARCH:
+        if table_name in TABLES_TO_IGNORE_IN_SEARCH:
             continue
         for post_id_col in ['post_id', 'agency', 'project', 'ID']:
             if post_id_col in table_df.columns:
@@ -30,7 +30,7 @@ def searchPostId(post_id, all_tables_df):
 
         for post_id_list_col in ['competing_manufacturers', 'bids', 'chosen_bids']:
             if post_id_list_col in table_df.columns:
-                is_empty = display_and_return_is_empty(table_df[table_df[post_id_list_col].apply(lambda x: str(post_id) in x)],
+                is_empty = display_and_return_is_empty(table_df[table_df[post_id_list_col].apply(lambda x: post_id in x)],
                                                        table_name + ": (in column '" + post_id_list_col + "')") and is_empty
     if is_empty:
         print("Error: Did not find any data on post id: " + str(post_id))
@@ -39,7 +39,7 @@ def searchPostId(post_id, all_tables_df):
 
 def searchString(str_val, all_tables_df):
     for table_name, table_df in all_tables_df.items():
-        if table_name in TABLES_TO_INGORE_IN_SEARCH:
+        if table_name in TABLES_TO_IGNORE_IN_SEARCH:
             continue
         print(table_name)
         for colname in list(table_df.columns):

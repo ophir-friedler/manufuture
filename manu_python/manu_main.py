@@ -12,7 +12,6 @@ def get_all_tables_df():
     all_tables_df = build_all_tables_df()
     table_builder.get_wp_tables_by_post_type(all_tables_df)
     data_cleaning.clean_tables(all_tables_df)
-    table_builder.bids(all_tables_df)
     table_builder.user_to_entity_rel(all_tables_df)
 
     enrichers.enrich_all(all_tables_df)

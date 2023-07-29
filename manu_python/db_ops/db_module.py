@@ -23,7 +23,7 @@ def get_db_connection():
 # Load MySQL DB to all_tables_df
 def build_all_tables_df():
     db_connection = get_db_connection()
-    all_table_names = pd.read_sql(f'SHOW TABLES', db_connection)['Tables_in_manufuture'];
+    all_table_names = pd.read_sql(f'SHOW TABLES', db_connection)['Tables_in_manufuture']
     all_tables_df = {}
     for table in all_table_names:
         all_tables_df[table] = selectAll(table, db_connection)

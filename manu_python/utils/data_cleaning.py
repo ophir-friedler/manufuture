@@ -39,6 +39,10 @@ def clean_wp_parts(all_tables_df):
     return all_tables_df
 
 
+def clean_wp_type_part(all_tables_df):
+    all_tables_df['wp_type_part']['unit_price'] = all_tables_df['wp_type_part']['unit_price'].fillna(-1).replace('', -1).astype('float')
+
+
 def get_bids_from_row(bids_from_row) -> list:
     if bids_from_row is None:
         return []
@@ -91,5 +95,6 @@ def clean_tables(all_tables_df):
     clean_wp_type_quote(all_tables_df)
     clean_wp_type_bid(all_tables_df)
     clean_wp_parts(all_tables_df)
+    clean_wp_type_part(all_tables_df)
 
 

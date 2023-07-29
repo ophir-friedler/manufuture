@@ -41,13 +41,17 @@ def searchString(str_val, all_tables_df):
     for table_name, table_df in all_tables_df.items():
         if table_name in TABLES_TO_IGNORE_IN_SEARCH:
             continue
-        print(table_name)
+        # print(table_name)
         for colname in list(table_df.columns):
+            found_val = False
             for val in [str(val) for val in all_tables_df[table_name][colname].astype(str).unique()]:
                 if str_val in val:
                     print("table: " + str(table_name))
                     print("   colname: " + str(colname))
                     print("   value: " + str(val))
+                    found_val = True
+            if found_val:
+                display(all_tables_df[table_name][all_tables_df[table_name][colname].astype(str).str.find(str_val) != -1])
 
 
 def parse_list_of_integers(list_of_integers_str):

@@ -3,7 +3,7 @@ from sklearn import metrics
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from models.pred_manufacturer_project_bid_submission import BidSubmissionPredictor
+from manu_python.models.pred_manufacturer_project_bid_submission import BidSubmissionPredictor
 
 
 def all_predictions(training_data, target_feature, bidSubmissionPredictor: BidSubmissionPredictor):

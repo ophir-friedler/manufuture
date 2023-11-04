@@ -54,6 +54,17 @@ def searchString(str_val, all_tables_df):
                 display(all_tables_df[table_name][all_tables_df[table_name][colname].astype(str).str.find(str_val) != -1])
 
 
+def searchForColumn(str_val, all_tables_df):
+    for table_name, table_df in all_tables_df.items():
+        # if table_name in TABLES_TO_IGNORE_IN_SEARCH:
+        #     continue
+        # print(table_name)
+        for colname in list(table_df.columns):
+            if str_val in str(colname):
+                print("table: " + str(table_name))
+                print("   colname: " + str(colname))
+
+
 def parse_list_of_integers(list_of_integers_str):
     if list_of_integers_str is None or len(list_of_integers_str.strip()) == 0:
         return []

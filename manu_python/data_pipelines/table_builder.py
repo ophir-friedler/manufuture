@@ -3,21 +3,38 @@ import logging
 import pandas as pd
 
 from manu_python.config.config import COUNTRY_TO_ISO_MAP
-from manu_python.utils import util_functions
 
 
-# TODO: join wp_posts data into the wp_type_XXX tables
+def netsuite_prices(all_tables_df):
+    netsuite_prices_df = pd.read_csv('/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/manufuture/netsuite_prices.csv')
+    netsuite_prices_df['average_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('mean')
+    netsuite_prices_df['average_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('mean')
+    netsuite_prices_df['min_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('min')
+    netsuite_prices_df['max_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('max')
+    netsuite_prices_df['Currencies'] = netsuite_prices_df.groupby('Memo')[['Currency']].agg({'Currency':lambda x: ", ".join(list(x))})
+    netsuite_prices_df['num_duplicates'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('count')
+    all_tables_df['netsuite_prices'] = netsuite_prices_df
+
+    netsuite_agg = netsuite_prices_df.groupby('Memo').agg({'Rate': ['min', 'max', 'count'],
+                                                           'Quantity': ['min', 'max'],
+                                                           'Currency': lambda x: ", ".join(list(x))})
+    netsuite_agg.columns = [' '.join(col).strip() for col in netsuite_agg.columns.values]
+    netsuite_agg = netsuite_agg.reset_index()
+    netsuite_agg = netsuite_agg.add_suffix('_netsuite')
+    all_tables_df['netsuite_agg'] = netsuite_agg #.merge(all_tables_df['wp_type_part'], how='left', left_on='Memo', right_on='name')
+
+
 def get_wp_tables_by_post_type(all_tables_df):
     all_post_types = list(all_tables_df['wp_posts']['post_type'].unique())
     wp_posts = all_tables_df['wp_posts']
     wp_postmeta = all_tables_df['wp_postmeta']
     for post_type in all_post_types:
+        wp_type_posttype = 'wp_type_' + post_type
         wp_posts_post_type = wp_posts[wp_posts['post_type'] == post_type]
-        post_type_ids_list = list(wp_posts_post_type['ID'])
-        wp_postmeta_post_type = wp_postmeta[(wp_postmeta['post_id'].isin(post_type_ids_list)) & (wp_postmeta['meta_key'].str[0] != '_')]
-        all_tables_df['wp_type_' + post_type] = wp_postmeta_post_type.pivot(index='post_id', columns='meta_key', values='meta_value').reset_index()# .drop(columns=['meta_key'])
-        all_tables_df['wp_type_' + post_type] = all_tables_df['wp_type_' + post_type].merge(wp_posts_post_type, left_on='post_id', right_on='ID').drop(columns=['ID', 'post_type'])
-
+        wp_postmeta_post_type = wp_postmeta[(wp_postmeta['post_id'].isin(list(wp_posts_post_type['ID'])))
+                                            & (wp_postmeta['meta_key'].str[0] != '_')]
+        all_tables_df[wp_type_posttype] = wp_postmeta_post_type.pivot(index='post_id', columns='meta_key', values='meta_value').reset_index()# .drop(columns=['meta_key'])
+        all_tables_df[wp_type_posttype] = all_tables_df[wp_type_posttype].merge(wp_posts_post_type, left_on='post_id', right_on='ID').drop(columns=['ID', 'post_type'])
 
 # Dependencies: wp_type_quote (enriched), wp_projects, wp_manufacturers
 # Builds pm_project_manufacturer

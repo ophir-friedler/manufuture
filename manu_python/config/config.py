@@ -205,3 +205,9 @@ ALL_PROJECT_FEATURES = [
     'project_creation_date_Ym',
     'is_quote_carried_out'
 ]
+
+PRICE_BUCKETS = [1, 1.5, 2.5, 4, 6, 10, 15, 20, 30, 50, 65, 80, 100, 125, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]
+MYSQL_PW = 'mysql123'
+MYSQL_ROOT = 'root'
+MYSQL_MANUFUTURE_DB = 'manufuture'
+MYSQL_HOST = 'localhost'

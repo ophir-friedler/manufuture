@@ -2,6 +2,7 @@ import pandas as pd
 
 import logging
 
+from manu_python.config.config import PRICE_BUCKETS
 from manu_python.utils import util_functions
 from manu_python.utils.util_functions import parse_list_of_integers
 
@@ -196,9 +197,24 @@ def enrich_wp_type_bid(all_tables_df):
         datetime_column='post_date')
 
 
+def enrich_wp_type_part(all_tables_df):
+    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_agg'], how='left', left_on='name', right_on='Memo_netsuite')
+    all_tables_df['wp_type_part']['price_bucket'] = all_tables_df['wp_type_part']['unit_price'].apply(bucket_prices)
+
+
+def bucket_prices(unit_price):
+    for index, val in enumerate(PRICE_BUCKETS):
+        if index == len(PRICE_BUCKETS) -1:
+            if unit_price >= val:
+                return len(PRICE_BUCKETS)
+        if unit_price < val:
+            return index
+
+
 def enrich_all(all_tables_df):
     enrich_wp_type_quote(all_tables_df)
     enrich_wp_type_bid(all_tables_df)
+    enrich_wp_type_part(all_tables_df)
     # add_is_bid_chosen_to_bids_df(all_tables_df)
     enrich_wp_manufacturers(all_tables_df)
     enrich_wp_projects(all_tables_df)

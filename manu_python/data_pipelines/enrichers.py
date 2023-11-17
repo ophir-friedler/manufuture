@@ -197,9 +197,36 @@ def enrich_wp_type_bid(all_tables_df):
         datetime_column='post_date')
 
 
+# Add netsuite prices to wp_type_part
+# Add werk data to wp_type_part
 def enrich_wp_type_part(all_tables_df):
     all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_agg'], how='left', left_on='name', right_on='Memo_netsuite')
     all_tables_df['wp_type_part']['price_bucket'] = all_tables_df['wp_type_part']['unit_price'].apply(bucket_prices)
+    # merge with werk_by_name table to get material categorization levels 1,2,3 for each part name in wp_type_part table
+    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['werk_by_name'], how='left', left_on='name', right_on='name')
+    # for each wp_type_part.name, count the number of names in werk_by_name that have wp_type_part.name as their prefix
+    all_tables_df['wp_type_part']['num_werk_results'] = all_tables_df['wp_type_part'].apply(lambda row: count_num_werk_results(row['name'], all_tables_df['werk_by_name']), axis=1)
+    all_tables_df['wp_type_part']['is_material_categorization_levels_same'] = all_tables_df['wp_type_part'].apply(lambda row: is_material_categorization_levels_same(row['name'], all_tables_df['werk_by_name']), axis=1)
+    # TODO : continue enriching wp_type_part with werk data
+
+
+
+def count_num_werk_results(name, werk_by_name_df):
+    # if name is Nan or None Or empty string, return 0
+    if name is None or pd.isnull(name) or len(name) == 0:
+        return 0
+    return len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)])
+
+
+def is_material_categorization_levels_same(name, werk_by_name_df):
+    if name is None or pd.isnull(name) or len(name) == 0:
+        return None
+    if len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)]['material_categorization_level_1_list'].unique()) == 1 and \
+            len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)]['material_categorization_level_2_list'].unique()) == 1 and \
+            len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)]['material_categorization_level_3_list'].unique()) == 1:
+        return 1
+    else:
+        return 0
 
 
 def bucket_prices(unit_price):

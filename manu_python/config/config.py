@@ -211,3 +211,5 @@ MYSQL_PW = 'mysql123'
 MYSQL_ROOT = 'root'
 MYSQL_MANUFUTURE_DB = 'manufuture'
 MYSQL_HOST = 'localhost'
+
+WERK_START_DIR = "/Users/ofriedler/Data/manufuture_data/werk_data/"

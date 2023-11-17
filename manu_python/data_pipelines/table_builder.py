@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 
 from manu_python.config.config import COUNTRY_TO_ISO_MAP
+from manu_python.db.dal import mysql_table_to_dataframe_without_connection
 
 
 def netsuite_prices(all_tables_df):
@@ -11,7 +12,7 @@ def netsuite_prices(all_tables_df):
     netsuite_prices_df['average_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('mean')
     netsuite_prices_df['min_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('min')
     netsuite_prices_df['max_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('max')
-    netsuite_prices_df['Currencies'] = netsuite_prices_df.groupby('Memo')[['Currency']].agg({'Currency':lambda x: ", ".join(list(x))})
+    netsuite_prices_df['Currencies'] = netsuite_prices_df.groupby('Memo')[['Currency']].agg({'Currency': lambda x: ", ".join(list(x))})
     netsuite_prices_df['num_duplicates'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('count')
     all_tables_df['netsuite_prices'] = netsuite_prices_df
 
@@ -21,7 +22,7 @@ def netsuite_prices(all_tables_df):
     netsuite_agg.columns = [' '.join(col).strip() for col in netsuite_agg.columns.values]
     netsuite_agg = netsuite_agg.reset_index()
     netsuite_agg = netsuite_agg.add_suffix('_netsuite')
-    all_tables_df['netsuite_agg'] = netsuite_agg #.merge(all_tables_df['wp_type_part'], how='left', left_on='Memo', right_on='name')
+    all_tables_df['netsuite_agg'] = netsuite_agg
 
 
 def get_wp_tables_by_post_type(all_tables_df):
@@ -33,8 +34,12 @@ def get_wp_tables_by_post_type(all_tables_df):
         wp_posts_post_type = wp_posts[wp_posts['post_type'] == post_type]
         wp_postmeta_post_type = wp_postmeta[(wp_postmeta['post_id'].isin(list(wp_posts_post_type['ID'])))
                                             & (wp_postmeta['meta_key'].str[0] != '_')]
-        all_tables_df[wp_type_posttype] = wp_postmeta_post_type.pivot(index='post_id', columns='meta_key', values='meta_value').reset_index()# .drop(columns=['meta_key'])
-        all_tables_df[wp_type_posttype] = all_tables_df[wp_type_posttype].merge(wp_posts_post_type, left_on='post_id', right_on='ID').drop(columns=['ID', 'post_type'])
+        all_tables_df[wp_type_posttype] = wp_postmeta_post_type.pivot(index='post_id', columns='meta_key',
+                                                                      values='meta_value').reset_index()  # .drop(columns=['meta_key'])
+        all_tables_df[wp_type_posttype] = all_tables_df[wp_type_posttype].merge(wp_posts_post_type, left_on='post_id',
+                                                                                right_on='ID').drop(
+            columns=['ID', 'post_type'])
+
 
 # Dependencies: wp_type_quote (enriched), wp_projects, wp_manufacturers
 # Builds pm_project_manufacturer
@@ -129,8 +134,10 @@ def standardize_country_values(training_data):
 
 # Return: 'user_id', 'user_type', 'user_type_post_id', 'user_type_status'
 def extract_user_info_from_wp_usermeta(user_id_group):
-    manufacturer_info = user_id_group[(user_id_group['meta_key'] == 'rel_manufacturer') & (user_id_group['meta_value'].str.len() > 0)]
-    agency_info = user_id_group[(user_id_group['meta_key'] == 'rel_agency') & (user_id_group['meta_value'].str.len() > 0)]
+    manufacturer_info = user_id_group[
+        (user_id_group['meta_key'] == 'rel_manufacturer') & (user_id_group['meta_value'].str.len() > 0)]
+    agency_info = user_id_group[
+        (user_id_group['meta_key'] == 'rel_agency') & (user_id_group['meta_value'].str.len() > 0)]
     status_info = user_id_group[user_id_group['meta_key'] == 'wp_capabilities']
     manufacturer_name = manufacturer_info.iloc[0]['meta_value'] if len(manufacturer_info) > 0 else None
     agency_name = agency_info.iloc[0]['meta_value'] if len(agency_info) > 0 else None
@@ -155,8 +162,29 @@ def user_to_entity_rel(all_tables_df):
     logging.info("Building user_to_entity_rel: user_id, user_type, user_type_post_id, user_type_status")
 
     # group wp_usermeta by user_id and apply the extract_user_info_from_wp_usermeta function
-    user_info_df = all_tables_df['wp_usermeta'].groupby('user_id').apply(extract_user_info_from_wp_usermeta).reset_index(drop=True)
+    user_info_df = all_tables_df['wp_usermeta'].groupby('user_id').apply(
+        extract_user_info_from_wp_usermeta).reset_index(drop=True)
     user_info_df['user_type_post_id'] = user_info_df['user_type_post_id'].fillna(-1).astype(int)
     all_tables_df['user_to_entity_rel'] = user_info_df
 
 
+# Dependencies: all_tables_df['werk']
+# Group by all_tables_df['werk'] by name
+# For each name, get the number of pages, list of material categorization level 1,2,3 when not null
+def werk_by_result_name() -> pd.DataFrame:
+    logging.info("Building werk_enrich: name, num_pages, material_categorization_level_1, material_categorization_level_2, material_categorization_level_3")
+    werk_df = mysql_table_to_dataframe_without_connection('werk')
+    werk_by_name_df = werk_df.groupby('name').agg(number_of_pages=('page_number', 'count'),
+                                                  material_categorization_level_1_list=(
+                                                  'material_categorization_level_1', lambda x: process_method(x)),
+                                                  material_categorization_level_2_list=(
+                                                  'material_categorization_level_2', lambda x: process_method(x)),
+                                                  material_categorization_level_3_list=(
+                                                  'material_categorization_level_3', lambda x: process_method(x))
+                                                  )
+    werk_by_name_df = werk_by_name_df.reset_index()
+    return werk_by_name_df
+
+
+def process_method(x):
+    return ", ".join(set([y if y is not None else 'None' for y in list(x)]))

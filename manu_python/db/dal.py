@@ -13,7 +13,13 @@ DB_CONNECTION_STRING = "mysql+pymysql://root:mysql123@localhost/manufuture"
 EMAIL_LOGS_DIR = '/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/logs-2021-05-01_2021-12-30.csv'
 
 
-def select_all(table_name, db_connection):
+# read a mysql table into a dataframe without using an existing db connection
+def mysql_table_to_dataframe_without_connection(table_name) -> pd.DataFrame:
+    sql_engine = create_engine(DB_CONNECTION_STRING)  # , pool_recycle=3600
+    db_connection = sql_engine.connect()
+    return pd.read_sql(f'SELECT * FROM ' + table_name, db_connection)
+
+def mysql_table_to_dataframe(table_name, db_connection) -> pd.DataFrame:
     return pd.read_sql(f'SELECT * FROM ' + table_name, db_connection)
 
 
@@ -29,7 +35,7 @@ def fetch_all_tables_df():
     all_table_names = pd.read_sql(f'SHOW TABLES', db_connection)['Tables_in_manufuture']
     all_tables_df = {}
     for table in all_table_names:
-        all_tables_df[table] = select_all(table, db_connection)
+        all_tables_df[table] = mysql_table_to_dataframe(table, db_connection)
 
     # Load e-mail logs to all_tables_df['email_logs']:
     # all_tables_df['email_logs'] = pd.read_csv(EMAIL_LOGS_DIR)
@@ -178,8 +184,8 @@ def generate_insert_query(dict_columns_name_to_value, table_name):
     return query
 
 
-# Insert dataframe to a table in manufuture db
-def insert_df_to_table(table_name, df):
+# Get a dataframe, and build a mysql table from it according to the dataframe's name and columns
+def dataframe_to_mysql_table(table_name, df):
     try:
         connection = mysql.connector.connect(host=MYSQL_HOST,
                                              database=MYSQL_MANUFUTURE_DB,
@@ -191,8 +197,9 @@ def insert_df_to_table(table_name, df):
 
         cursor = connection.cursor()
         try:
-            df.to_sql(table_name, con=connection, if_exists='append', index=False)
-            print(f"Dataframe inserted successfully to {table_name}")
+            sql_engine = create_engine(DB_CONNECTION_STRING)
+            df.to_sql(table_name, con=sql_engine, if_exists='replace', index=False)
+            print(f"Table {table_name} created successfully")
         except Error as e:
             print(f"Error: {e}")
         connection.commit()

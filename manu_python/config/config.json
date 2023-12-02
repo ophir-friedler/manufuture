@@ -1,0 +1,26 @@
+{
+  "STATIC_DATA_DIR_PATH": "./manu_python/static_data/",
+  "MODEL_FILE_NAME": "model__deep_v0__T__experiment_1_training_data.h5",
+  "MANUFACTURERS_DATA_DF_FILE_NAME": "manufacturers_data_df.parquet",
+  "X_TRAIN_TWO_ROWS_FILE_NAME": "x_train_two_rows.parquet",
+  "ALL_MANUFACTURER_FEATURES": ["post_id_manuf", "sheet_metal_inserts", "sheet_metal_weldings", "sheet_metal_punching"
+  , "employees_num", "country"],
+  "ALL_PROJECT_FEATURES": [
+  "req_turning", "req_milling", "plan", "req_sheet_metal", "req_sheet_metal_inserts", "one_manufacturer"
+  , "num_distinct_parts_binned", "total_quantity_of_parts_binned"
+  ],
+  "SELECTED_SINGLES": [
+    "employees_num", "sheet_metal_inserts", "country"
+
+  , "req_turning", "req_milling", "plan", "req_sheet_metal", "req_sheet_metal_inserts"],
+    "SELECTED_DOUBLES": [
+      ["post_id_manuf", "plan"]
+    , ["post_id_manuf", "req_sheet_metal_inserts"]
+    , ["post_id_manuf", "req_sheet_metal"]
+    , ["post_id_manuf", "one_manufacturer"]
+    , ["post_id_manuf", "num_distinct_parts_binned"]
+    , ["post_id_manuf", "total_quantity_of_parts_binned"]
+    , ["sheet_metal_weldings", "sheet_metal_punching"]
+    ],
+  "LABEL_COLUMN": "is_manuf_bid"
+}

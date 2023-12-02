@@ -1,6 +1,7 @@
 import logging
 
 import manu_python.manu_main
+from manu_python.config.config import MANUFACTURER_BID_LABEL_COLUMN_NAME
 from manu_python.model_evaluation import evaluators
 from manu_python.models import pred_manufacturer_project_bid_submission
 
@@ -23,7 +24,6 @@ all_tables_df = manu_python.manu_main.get_all_tables_df()
 
 bidSubmissionPredictor = pred_manufacturer_project_bid_submission.BidSubmissionPredictor()
 bidSubmissionPredictor.build_model(all_tables_df=all_tables_df,
-                                   label_column='is_manuf_bid',
                                    model_type=MODEL_TYPE,
                                    verbose=True
                                    )

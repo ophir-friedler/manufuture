@@ -1,8 +1,7 @@
 # Follows notebooks/Modelling.ipynb
 
-from tensorboard.notebook import display
-
 from manu_python import manu_main
+from manu_python.config.config import MANUFACTURER_BID_LABEL_COLUMN_NAME
 from manu_python.model_evaluation import evaluators
 from manu_python.models import pred_manufacturer_project_bid_submission
 
@@ -22,7 +21,6 @@ DEPLOY_TO_MODEL_VAR_B = False
 all_tables_df = manu_main.get_all_tables_df()
 bidSubmissionPredictor = pred_manufacturer_project_bid_submission.BidSubmissionPredictor()
 bidSubmissionPredictor.build_model(all_tables_df=all_tables_df,
-                                   label_column='is_manuf_bid',
                                    model_type=MODEL_TYPE,
                                    verbose=True
                                    )
@@ -36,7 +34,7 @@ print("number of projects: " + str(all_tables_df[bidSubmissionPredictor._input_t
 # Evaluation:
 predictor = bidSubmissionPredictor
 prediction_colname = 'predBidProb'
-outcome_colname = 'is_manuf_bid'
+outcome_colname = MANUFACTURER_BID_LABEL_COLUMN_NAME
 num_top_manufacturers = 5
 evaluation_df = evaluators.evaluate_manufacturers_bid_for_project_ranking(predictor=predictor,
                                                                           all_tables_df=all_tables_df,

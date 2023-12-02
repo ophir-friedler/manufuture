@@ -3,13 +3,14 @@ from sklearn import metrics
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from manu_python.config.config import MANUFACTURER_BID_LABEL_COLUMN_NAME
 from manu_python.models.pred_manufacturer_project_bid_submission import BidSubmissionPredictor
 
 
 def all_predictions(training_data, target_feature, bidSubmissionPredictor: BidSubmissionPredictor):
     # labels matrix
-    labels_df = training_data[['is_manuf_bid']].reset_index().pivot(index="post_id_manuf", columns="post_id_project",
-                                                                    values="is_manuf_bid")
+    labels_df = training_data[[MANUFACTURER_BID_LABEL_COLUMN_NAME]].reset_index().pivot(index="post_id_manuf", columns="post_id_project",
+                                                                    values=MANUFACTURER_BID_LABEL_COLUMN_NAME)
 
     set_of_manufacturers = set(training_data.index.get_level_values('post_id_manuf'))
     set_of_projects = set(training_data.index.get_level_values('post_id_project'))
@@ -70,7 +71,7 @@ def evaluate_manufacturers_bid_for_project_ranking(predictor: BidSubmissionPredi
                                                    prediction_colname,
                                                    outcome_colname,
                                                    num_top_manufacturers):
-    projects_with_bids_df = all_tables_df[predictor._input_table_name]
+    projects_with_bids_df = all_tables_df['pam_project_active_manufacturer_th_4_label_reqs']
     # Do not account projects without bids in the evaluation (same score for all models == noise)
     projects_with_bids_df = projects_with_bids_df[projects_with_bids_df['competing_manufacturers'].apply(len) > 0]
     evaluation_projects_set = set(projects_with_bids_df['post_id_project'])

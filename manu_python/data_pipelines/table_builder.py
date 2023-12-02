@@ -1,8 +1,11 @@
 import logging
+import math
 
 import pandas as pd
+from phpserialize import dict_to_list, loads
 
-from manu_python.config.config import COUNTRY_TO_ISO_MAP
+from manu_python.config.config import COUNTRY_TO_ISO_MAP, MIN_NUM_BIDS_PER_MANUFACTURER, \
+    MANUFACTURER_BID_LABEL_COLUMN_NAME
 from manu_python.db.dal import mysql_table_to_dataframe_without_connection
 
 
@@ -39,6 +42,7 @@ def get_wp_tables_by_post_type(all_tables_df):
         all_tables_df[wp_type_posttype] = all_tables_df[wp_type_posttype].merge(wp_posts_post_type, left_on='post_id',
                                                                                 right_on='ID').drop(
             columns=['ID', 'post_type'])
+    clean_wp_type_tables(all_tables_df)
 
 
 # Dependencies: wp_type_quote (enriched), wp_projects, wp_manufacturers
@@ -53,13 +57,14 @@ def pm_project_manufacturer(all_tables_df):
     pm_df = wp_type_quote.merge(wp_projects, left_on='project', right_on='post_id', suffixes=('_quote', '_project'))
     # For each manufacturer create a project-manufacturer row with data from wp_manufacturers
     wp_manufacturers = all_tables_df['wp_manufacturers'].rename(columns={'post_id': 'post_id_manuf'})
+    # TODO: replace wp_manufacturers with wp_type_manufacturer
     pm_df = pm_df.merge(wp_manufacturers, how='cross', suffixes=('_quote', '_manuf'))
 
     # Clean columns data
     standardize_country_values(pm_df)
 
     # build Label column
-    pm_df['is_manuf_bid'] = pm_df.apply(lambda row: 1 if row['post_id_manuf'] in row['competing_manufacturers'] else 0,
+    pm_df[MANUFACTURER_BID_LABEL_COLUMN_NAME] = pm_df.apply(lambda row: 1 if row['post_id_manuf'] in row['competing_manufacturers'] else 0,
                                         axis='columns')
 
     # set index by project-manufacturer
@@ -70,8 +75,8 @@ def pm_project_manufacturer(all_tables_df):
 # Dependencies: pam_project_active_manufacturer
 def ac_agency_manufacturer(all_tables_df):
     ac_df = all_tables_df['pm_project_manufacturer'] \
-        .reset_index().groupby(['agency', 'post_id_manuf'])[['is_manuf_bid']] \
-        .agg({'is_manuf_bid': ['sum']})
+        .reset_index().groupby(['agency', 'post_id_manuf'])[[MANUFACTURER_BID_LABEL_COLUMN_NAME]] \
+        .agg({MANUFACTURER_BID_LABEL_COLUMN_NAME: ['sum']})
     ac_df.columns = ['num_bids']
     all_tables_df['ac_agency_manufacturer'] = ac_df
 
@@ -81,12 +86,12 @@ def pam_project_active_manufacturer(all_tables_df, num_bids_activation_threshold
     new_table_name: str = 'pam_project_active_manufacturer_th_' + str(num_bids_activation_threshold)
     if new_table_name not in all_tables_df:
         pm = all_tables_df['pm_project_manufacturer'].reset_index()
-        manuf_num_bids = pm.groupby(['post_id_manuf'])[['is_manuf_bid']].sum().reset_index()
+        manuf_num_bids = pm.groupby(['post_id_manuf'])[[MANUFACTURER_BID_LABEL_COLUMN_NAME]].sum().reset_index()
         manuf_num_bids.columns = ['post_id_manuf', 'manuf_num_bids']
         active_manufs = manuf_num_bids[manuf_num_bids['manuf_num_bids'] >= num_bids_activation_threshold]
         pm_only_active_manufs = pd.merge(pm, active_manufs, on='post_id_manuf', how='inner')
         all_tables_df[new_table_name] = pm_only_active_manufs
-        logging.info(new_table_name + "created in all_tables_df")
+        logging.info(new_table_name + " created in all_tables_df")
 
     return new_table_name
 
@@ -108,8 +113,9 @@ def pam_label_by_project_requirements(all_tables_df, pam_table_name):
     # for efficiency
     if new_table_name not in all_tables_df:
         start_table = all_tables_df[pam_table_name]
+        # label 0 == 'not bid' all rows where the manufacturer does not have the required capabilities
         start_table[(start_table['cnc_milling'] < start_table['req_milling'])
-                    | (start_table['cnc_turning'] < start_table['req_turning'])]['is_manuf_bid'] = 0
+                    | (start_table['cnc_turning'] < start_table['req_turning'])][MANUFACTURER_BID_LABEL_COLUMN_NAME] = 0
         all_tables_df[new_table_name] = start_table.copy()
 
     return new_table_name
@@ -170,7 +176,7 @@ def user_to_entity_rel(all_tables_df):
 
 # Dependencies: all_tables_df['werk']
 # Group by all_tables_df['werk'] by name
-# For each name, get the number of pages, list of material categorization level 1,2,3 when not null
+# For each name, get the number of pages, list of material categorization logging_level 1,2,3 when not null
 def werk_by_result_name() -> pd.DataFrame:
     logging.info("Building werk_enrich: name, num_pages, material_categorization_level_1, material_categorization_level_2, material_categorization_level_3")
     werk_df = mysql_table_to_dataframe_without_connection('werk')
@@ -188,3 +194,116 @@ def werk_by_result_name() -> pd.DataFrame:
 
 def process_method(x):
     return ", ".join(set([y if y is not None else 'None' for y in list(x)]))
+
+
+def clean_wp_type_tables(all_tables_df):
+    for table, column in [('wp_type_quote', 'bids')
+        , ('wp_type_quote', 'chosen_bids')
+        , ('wp_type_agency', 'engineers')
+        , ('wp_type_manufacturer', 'certifications')
+                          ]:
+        all_tables_df[table][column] = all_tables_df[table][column].apply(digit_array_of_digits_transform)
+    clean_wp_type_quote(all_tables_df)
+    clean_wp_type_part(all_tables_df)
+    clean_wp_type_bid(all_tables_df)
+    clean_wp_type_manufacturer(all_tables_df)
+
+
+def digit_array_of_digits_transform(digit_or_string):
+    if (digit_or_string is None) or \
+            (isinstance(digit_or_string, float) and math.isnan(digit_or_string)) or \
+            (isinstance(digit_or_string, str) and len(digit_or_string) == 0):
+        return []
+    if digit_or_string.isdigit():
+        return digit_or_string
+    if isinstance(digit_or_string, str):
+        return [int(x) for x in dict_to_list(loads(str.encode(digit_or_string)))]
+    logging.error("Should not ever reach nere, parsing error in some table, column")
+
+
+def build_raw_data_tables(all_tables_df):
+    clean_wp_manufacturers(all_tables_df)
+    clean_wp_parts(all_tables_df)
+    get_wp_tables_by_post_type(all_tables_df)
+    user_to_entity_rel(all_tables_df)
+    netsuite_prices(all_tables_df)
+
+
+def build_training_data_tables(all_tables_df):
+    pm_project_manufacturer(all_tables_df)
+    pam_project_active_manufacturer(all_tables_df, 1)
+    ac_agency_manufacturer(all_tables_df)
+    proj_manu_training_table_name = build_proj_manu_training_table(all_tables_df, MIN_NUM_BIDS_PER_MANUFACTURER)
+    logging.warning("proj_manu_training_table_name: " + proj_manu_training_table_name)
+
+
+def clean_wp_type_quote(all_tables_df):
+    logging.info("Cleaning wp_type_quote")
+    df = all_tables_df['wp_type_quote']
+    # Remove Avsha's test-agency (216)
+    # Remove Ben's test-agency (439)
+    df = df.drop(df[df['agency'].isin(["216", "439"])].index)
+    df['bids'] = df['bids'].apply(get_bids_from_row)
+    df['chosen_bids'] = df['chosen_bids'].apply(get_bids_from_row)
+    all_tables_df['wp_type_quote'] = df
+    return all_tables_df
+
+
+def clean_wp_type_manufacturer(all_tables_df):
+    all_tables_df['wp_type_manufacturer']['cnc_turning_notes'] = all_tables_df['wp_type_manufacturer']['cnc_turning_notes'].fillna('').astype('str')
+
+
+def clean_wp_type_bid(all_tables_df):
+    all_tables_df['wp_type_bid']['manufacturer'] = all_tables_df['wp_type_bid']['manufacturer'].astype('int64')
+
+
+def get_bids_from_row(bids_from_row) -> list:
+    if bids_from_row is None:
+        return []
+    if isinstance(bids_from_row, list):
+        return bids_from_row
+    if bids_from_row.isdigit():
+        return [int(bids_from_row)]
+    if isinstance(bids_from_row, str):
+        if len(bids_from_row.strip()) == 0:
+            return []
+        bids_split = bids_from_row[1:-1].split(",")
+        return [int(bid) for bid in bids_split]
+
+
+def clean_wp_type_part(all_tables_df):
+    all_tables_df['wp_type_part']['unit_price'] = all_tables_df['wp_type_part']['unit_price'].fillna(-1).replace('', -1).astype('float')
+
+
+def clean_wp_manufacturers(all_tables_df):
+    # remove test manufacturers
+    test_manufacturers = [437, 590, 708, 1268, 24840]
+    df = all_tables_df['wp_manufacturers']
+    df = df.drop(df[df['post_id'].isin(test_manufacturers)].index)
+    all_tables_df['wp_manufacturers'] = df
+    # replace Empty strings in 'vendors' with 0
+    all_tables_df['wp_manufacturers']['vendors'].replace('', 0, inplace=True)
+    # replace Nons with 0:
+    for nan_col in ['conventional_milling', 'conventional_turning', 'sheet_metal_press_break', 'sheet_metal_punching',
+                    'sheet_metal_weldings', 'preffered_type_full_turnkey', 'preffered_type_assemblies']:
+        all_tables_df['wp_manufacturers'][nan_col].fillna('0', inplace=True)
+    # translate vendors type to int
+    all_tables_df['wp_manufacturers']['vendors'] = all_tables_df['wp_manufacturers']['vendors'].astype('int64')
+    all_tables_df['wp_manufacturers']['cnc_milling'] = all_tables_df['wp_manufacturers']['cnc_milling'].fillna(0).astype('int64')
+    all_tables_df['wp_manufacturers']['cnc_turning'] = all_tables_df['wp_manufacturers']['cnc_turning'].fillna(0).astype('int64')
+    # set 'house' column to type str and replace NaN with empty string '' (for later use in concat)
+    all_tables_df['wp_manufacturers']['house'] = all_tables_df['wp_manufacturers']['house'].fillna('').astype('str')
+    all_tables_df['wp_manufacturers']['cnc_turning_notes'] = all_tables_df['wp_manufacturers']['cnc_turning_notes'].fillna('').astype('str')
+
+
+def clean_wp_parts(all_tables_df):
+    df = all_tables_df['wp_parts']
+
+    # Replace empty strings with NaN values in the 'quantity' column and then fill with zeros
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
+
+    # Expand machining process
+    df = pd.concat([df, pd.get_dummies(df['machining_process'])], axis=1)
+
+    all_tables_df['wp_parts'] = df
+    return all_tables_df

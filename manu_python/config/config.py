@@ -213,3 +213,13 @@ MYSQL_MANUFUTURE_DB = 'manufuture'
 MYSQL_HOST = 'localhost'
 
 WERK_START_DIR = "/Users/ofriedler/Data/manufuture_data/werk_data/"
+STATIC_DATA_DIR_PATH = './manu_python/static_data/'
+MIN_NUM_BIDS_PER_MANUFACTURER = 4
+MANUFACTURER_BID_LABEL_COLUMN_NAME = 'is_manuf_bid'
+
+COLUMNS_DTYPES = {'house': str, 'cnc_turning_notes': str, 'zip': str, 'cnc_milling_notes': str
+    , 'cnc_turning_milling_notes': str, 'conventional_turning_notes': str, 'conventional_milling_notes': str
+    , 'sheet_metal_laser_cutting_notes': str, 'sheet_metal_press_break_notes': str, 'sheet_metal_punching_notes': str
+    , 'qa_lab_capability_desc': str, 'traceability_system': str, 'sqe_team_and_supplier_quality_policy': str
+    , 'quality_system_desc': str, 'company_id':str, 'state':str, 'manufacture_state':str
+}

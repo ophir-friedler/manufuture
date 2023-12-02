@@ -1,4 +1,5 @@
 # # Initialization and DB connection
+import os
 
 import mysql.connector
 import pandas as pd
@@ -6,6 +7,8 @@ from mysql.connector import Error
 from sqlalchemy import create_engine
 
 from manu_python.config.config import MYSQL_PW, MYSQL_ROOT, MYSQL_MANUFUTURE_DB, MYSQL_HOST
+
+RELEVANT_FOR_SERVING_TABLES_LIST = ['wp_type_manufacturer', 'wp_type_part', 'wp_type_project', 'wp_type_quote', 'pam_project_active_manufacturer_th_4_label_reqs']
 
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.max_rows', 300)
@@ -39,6 +42,27 @@ def fetch_all_tables_df():
 
     # Load e-mail logs to all_tables_df['email_logs']:
     # all_tables_df['email_logs'] = pd.read_csv(EMAIL_LOGS_DIR)
+    return all_tables_df
+
+
+# save all_tables_df to static data directory
+def save_relevant_all_tables_df(all_tables_df):
+    for table_name, table_df in all_tables_df.items():
+        if table_name in RELEVANT_FOR_SERVING_TABLES_LIST:
+            # table_df.to_csv('./manu_python/static_data/all_tables_df__' + table_name + '.csv', index=False)
+            table_df.to_parquet('./manu_python/static_data/all_tables_df__' + table_name + '.parquet', index=False)
+
+
+# read all_tables_df from static data directory
+def load_relevant_all_tables_df():
+    # Read all csvs from static data directory starting with 'all_tables_df__' and ending with '.csv' and load them to all_tables_df
+    all_tables_df = {}
+    for file in os.listdir('./manu_python/static_data/'):
+        if file.startswith('all_tables_df__') and file.endswith('.parquet'):
+            table_name = file.replace('all_tables_df__', '').replace('.parquet', '')
+            if table_name in RELEVANT_FOR_SERVING_TABLES_LIST:
+                all_tables_df[table_name] = pd.read_parquet('./manu_python/static_data/' + file)
+            # pd.read_csv('./manu_python/static_data/' + file)
     return all_tables_df
 
 
@@ -270,3 +294,4 @@ def run_queries_in_manufuture_db(queries, verbose=False):
         connection.close()
     except Error as e:
         print(f"Error while connecting to MySQL: {e}")
+

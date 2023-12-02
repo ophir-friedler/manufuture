@@ -1,5 +1,9 @@
+import logging
+
 import matplotlib.pyplot as plt
 import pandas as pd
+
+from manu_python.config.config import MANUFACTURER_BID_LABEL_COLUMN_NAME
 
 
 def display_bids_per_month(bids_df, ax, title):
@@ -122,9 +126,14 @@ def agency_dashboard(all_tables_df, agency_id):
     wp_projects_agency_df = wp_projects_df[wp_projects_df['agency'].apply(str) == str(agency_id)]
     print("Number of projects: " + str(len(wp_projects_agency_df)))
     pm = all_tables_df['pm_project_manufacturer']
-    pm_agency_bid_manufs = pm[(pm['agency'] == agency_id_str) & (pm['is_manuf_bid'] > 0)]
-    agency_manufs_bid = pm_agency_bid_manufs.reset_index().groupby('agency')[['post_id_manuf', 'is_manuf_bid']]
-    num_manufs_bid_on_agency = agency_manufs_bid.nunique().at[agency_id_str, 'post_id_manuf']
+    pm_agency_bid_manufs = pm[(pm['agency'] == agency_id_str) & (pm[MANUFACTURER_BID_LABEL_COLUMN_NAME] > 0)]
+    agency_manufs_bid = pm_agency_bid_manufs.reset_index().groupby('agency')[['post_id_manuf', MANUFACTURER_BID_LABEL_COLUMN_NAME]]
+    uniques_df = agency_manufs_bid.nunique()
+    # check that uniques_df is not empty (i.e.: agency has bids)
+    if uniques_df.empty:
+        logging.error("Agency " + agency_id_str + " has no bids")
+        return
+    num_manufs_bid_on_agency = uniques_df.at[agency_id_str, 'post_id_manuf']
     print("Number of manufacturers that bid for agency's projects: " + str(num_manufs_bid_on_agency))
     print("from wp_projects: ")
     display(wp_projects_df[wp_projects_df['agency'].apply(str) == agency_id_str])

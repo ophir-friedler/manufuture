@@ -19,8 +19,8 @@ def enrich_wp_type_quote(all_tables_df):
     logging.info("Enriching wp_type_quote with: competing_manufacturers, num_candidates, is_bid_chosen ")
 
     def get_manufacturers_of_bids(bids: list) -> list:
-        bids_df = all_tables_df['wp_type_bid']
-        return [x for x in list(bids_df[bids_df['post_id'].isin(bids)]['manufacturer']) if x is not None]
+        wp_type_bid = all_tables_df['wp_type_bid']
+        return [x for x in list(wp_type_bid[wp_type_bid['post_id'].isin(bids)]['manufacturer']) if x is not None]
 
     df = all_tables_df['wp_type_quote']
     df['competing_manufacturers'] = df.apply(lambda row: get_manufacturers_of_bids(row['bids']), axis='columns')

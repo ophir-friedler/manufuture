@@ -7,14 +7,14 @@ import tensorflow as tf
 from keras.layers import Dense
 from keras.models import Sequential
 
-from manu_python.config.config import STATIC_DATA_DIR_PATH, MANUFACTURER_BID_LABEL_COLUMN_NAME, COLUMNS_DTYPES
+from manu_python.config.config import STATIC_DATA_DIR_PATH, MANUFACTURER_BID_LABEL_COLUMN_NAME
 
 
 class BidSubmissionPredictor:
     _label_column = MANUFACTURER_BID_LABEL_COLUMN_NAME
     _categorical_features = None
-    _training_table_name = 'experiment_1_training_data'
     _input_table_name = 'pam_project_active_manufacturer_th_4_label_reqs'
+    _training_table_name = _input_table_name + '_training'
     _manufacturers_data_df = None
     _is_model_trained = False
     _model_types = ['deep_v0']
@@ -98,7 +98,6 @@ class BidSubmissionPredictor:
         self._model.save(model_save_path)
         self._manufacturers_data_df.to_parquet(STATIC_DATA_DIR_PATH + 'manufacturers_data_df.parquet')
         # save the fit_predict_columns to a file and maintain the order of the columns
-        fit_predict_columns_path = STATIC_DATA_DIR_PATH + 'fit_predict_columns.csv'
         self._x_train_two_rows.to_parquet(STATIC_DATA_DIR_PATH + 'x_train_two_rows.parquet')
 
         logging.warning("Saved model to: " + model_save_path)
@@ -110,7 +109,6 @@ class BidSubmissionPredictor:
         self._model_type = model_path.split('__')[1]
         self._is_model_trained = True
         self._x_train_two_rows = pd.read_parquet(STATIC_DATA_DIR_PATH + 'x_train_two_rows.parquet')
-
 
     def _validate_configuration(self):
         all_features_set = set(self._selected_singles).union(set([single for double in self._selected_doubles for single in double]))
@@ -124,6 +122,7 @@ class BidSubmissionPredictor:
     def build_model(self, all_tables_df, model_type, verbose=False):
         self._model_type = model_type
         if self._validate_configuration():
+            # TODO: get manufactures' data from all_tables_df['wp_type_manufacturer']
             self._manufacturers_data_df = all_tables_df[self._input_table_name][self._all_manufacturer_features].drop_duplicates()
             all_tables_df[self._training_table_name] = self.prepare_for_fit_predict(
                 all_tables_df[self._input_table_name], verbose=verbose)
@@ -157,7 +156,6 @@ class BidSubmissionPredictor:
         logging.error("Shouldn't reach here, model type unkown: " + self._model_type)
         return None
 
-    # Returns lr_model trained on training_data
     # Training data needs to contain all features, as well as target feature
     def train_bid_submission_predictor(self, training_data, model_type, verbose=False):
         X_train = training_data.drop(columns=[self._label_column])
@@ -271,15 +269,15 @@ class BidSubmissionPredictor:
         ret_df = row.merge(manuf_features_df, how='cross')
         return ret_df
 
-    def get_manuf_features_df(self, all_tables_df, use_static_data=False):
-        if use_static_data:
-            print("Current path: " + os.getcwd())
-            input_table_path = STATIC_DATA_DIR_PATH + self._input_table_name + '.csv'
-            logging.warning("Reading from static data: " + input_table_path)
-            input_table_df = pd.read_csv(input_table_path, dtype=COLUMNS_DTYPES)
-            return input_table_df[self._all_manufacturer_features].drop_duplicates()
-        else:
-            return all_tables_df[self._input_table_name][self._all_manufacturer_features].drop_duplicates()
+    # def get_manuf_features_df(self, all_tables_df, use_static_data=False):
+    #     if use_static_data:
+    #         print("Current path: " + os.getcwd())
+    #         input_table_path = STATIC_DATA_DIR_PATH + self._input_table_name + '.csv'
+    #         logging.warning("Reading from static data: " + input_table_path)
+    #         input_table_df = pd.read_csv(input_table_path, dtype=COLUMNS_DTYPES)
+    #         return input_table_df[self._all_manufacturer_features].drop_duplicates()
+    #     else:
+    #         return all_tables_df[self._input_table_name][self._all_manufacturer_features].drop_duplicates()
 
     def rank_for_all_projects_to_csv(self, all_tables_df, max_num_recommendations, csv_filename):
         project_ids = set(all_tables_df[self._input_table_name]['post_id_project'])

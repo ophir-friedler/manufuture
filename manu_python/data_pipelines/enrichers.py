@@ -202,28 +202,49 @@ def enrich_wp_type_bid(all_tables_df):
 def enrich_wp_type_part(all_tables_df):
     all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_agg'], how='left', left_on='name', right_on='Memo_netsuite')
     all_tables_df['wp_type_part']['price_bucket'] = all_tables_df['wp_type_part']['unit_price'].apply(bucket_prices)
+
     # merge with werk_by_name table to get material categorization levels 1,2,3 for each part name in wp_type_part table
-    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['werk_by_name'], how='left', left_on='name', right_on='name')
-    # for each wp_type_part.name, count the number of names in werk_by_name that have wp_type_part.name as their prefix
-    all_tables_df['wp_type_part']['num_werk_results'] = all_tables_df['wp_type_part'].apply(lambda row: count_num_werk_results(row['name'], all_tables_df['werk_by_name']), axis=1)
-    all_tables_df['wp_type_part']['is_material_categorization_levels_same'] = all_tables_df['wp_type_part'].apply(lambda row: is_material_categorization_levels_same(row['name'], all_tables_df['werk_by_name']), axis=1)
-    # TODO : continue enriching wp_type_part with werk data
+    # This is only for the case where the part name is exactly the same as the result name
+    # all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['werk_by_name'], how='left', left_on='name', right_on='name')
+    # all_tables_df['wp_type_part']['found_werk'] = (all_tables_df['wp_type_part']['name'].notnull()).astype(int)
+
+    # Calculate werk data for each part name in wp_type_part table
+    werk_data_for_parts_df = all_tables_df['wp_type_part'].apply(lambda row: calculate_werk_data_for_part(row['name'], all_tables_df['werk_by_name']), axis=1)
+    all_tables_df['wp_type_part'] = pd.concat([all_tables_df['wp_type_part'], werk_data_for_parts_df], axis=1)
 
 
+def calculate_werk_data_for_part(part_name, werk_by_name_df):
+    if part_name is None or pd.isnull(part_name) or len(part_name) == 0:
+        return pd.Series({'num_werk_results': 0
+                             , 'found_werk': 0
+                             , 'is_material_categorization_levels_same': None
+                                , 'first_material_categorization_level_1_list': None
+                                , 'first_material_categorization_level_2_list': None
+                                , 'first_material_categorization_level_3_list': None
+                             , 'average_num_pages_per_result': None
+                          })
 
-def count_num_werk_results(name, werk_by_name_df):
-    # if name is Nan or None Or empty string, return 0
-    if name is None or pd.isnull(name) or len(name) == 0:
-        return 0
-    return len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)])
+    # Get all werk results that start with the part name
+    werk_data_for_name_df = werk_by_name_df[werk_by_name_df['name'].str.startswith(part_name)]
+
+    # Return the calculated values
+    return pd.Series({'num_werk_results': len(werk_data_for_name_df)
+                         , 'found_werk': 1 if len(werk_data_for_name_df) > 0 else 0
+                         , 'is_material_categorization_levels_same': is_material_categorization_levels_same(part_name, werk_data_for_name_df)
+                         , 'first_material_categorization_level_1_list' : werk_data_for_name_df['material_categorization_level_1_list'].iloc[0] if len(werk_data_for_name_df) > 0 else None
+                            , 'first_material_categorization_level_2_list' : werk_data_for_name_df['material_categorization_level_2_list'].iloc[0] if len(werk_data_for_name_df) > 0 else None
+                            , 'first_material_categorization_level_3_list' : werk_data_for_name_df['material_categorization_level_3_list'].iloc[0] if len(werk_data_for_name_df) > 0 else None
+                         , 'average_num_pages_per_result': werk_data_for_name_df['number_of_pages'].mean()
+
+                      })
 
 
-def is_material_categorization_levels_same(name, werk_by_name_df):
+def is_material_categorization_levels_same(name, werk_data_for_name_df):
     if name is None or pd.isnull(name) or len(name) == 0:
         return None
-    if len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)]['material_categorization_level_1_list'].unique()) == 1 and \
-            len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)]['material_categorization_level_2_list'].unique()) == 1 and \
-            len(werk_by_name_df[werk_by_name_df['name'].str.startswith(name)]['material_categorization_level_3_list'].unique()) == 1:
+    if len(werk_data_for_name_df['material_categorization_level_1_list'].unique()) == 1 and \
+            len(werk_data_for_name_df['material_categorization_level_2_list'].unique()) == 1 and \
+            len(werk_data_for_name_df['material_categorization_level_3_list'].unique()) == 1:
         return 1
     else:
         return 0

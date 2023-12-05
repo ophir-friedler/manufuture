@@ -19,6 +19,7 @@ def get_all_tables_df(logging_level=logging.WARNING):
 
     enrichers.enrich_all(all_tables_df)
 
+    # Model training data
     table_builder.build_training_data_tables(all_tables_df)
 
     # Aggregated statistics

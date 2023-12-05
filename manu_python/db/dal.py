@@ -17,7 +17,7 @@ EMAIL_LOGS_DIR = '/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/logs
 
 
 # read a mysql table into a dataframe without using an existing db connection
-def mysql_table_to_dataframe_without_connection(table_name) -> pd.DataFrame:
+def read_mysql_table_into_dataframe_without_connection(table_name) -> pd.DataFrame:
     sql_engine = create_engine(DB_CONNECTION_STRING)  # , pool_recycle=3600
     db_connection = sql_engine.connect()
     return pd.read_sql(f'SELECT * FROM ' + table_name, db_connection)
@@ -87,7 +87,7 @@ def create_table(table_name):
 
             print(f"Table {table_name} created successfully")
         except Error as e:
-            print(f"Error: {e}")
+            print(f"Error (create_table): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -111,7 +111,7 @@ def drop_table(table_name):
             cursor.execute(f"DROP TABLE {table_name}")
             print(f"Table {table_name} dropped successfully")
         except Error as e:
-            print(f"Error: {e}")
+            print(f"Error (drop_table): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -143,7 +143,7 @@ def add_column_to_table(table_name, column_name, column_type, verbose=False):
             if verbose:
                 print(f"Column {column_name} added successfully to {table_name}")
         except Error as e:
-            print(f"Error: {e}")
+            print(f"Error (add_column_to_table): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -167,7 +167,7 @@ def insert_value_to_column(table_name, column_name, value):
             cursor.execute(f"INSERT INTO {table_name} ({column_name}) VALUES ({value})")
             print(f"Value {value} inserted successfully to {table_name}.{column_name}")
         except Error as e:
-            print(f"Error: {e}")
+            print(f"Error (insert_value_to_column): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -192,7 +192,7 @@ def insert_row_to_table(table_name, dict_columns_name_to_value):
             cursor.execute(query)
         except Error as e:
             print("Query: " + f"INSERT INTO {table_name} ({columns_names}) VALUES ({values})")
-            print(f"Error: {e}")
+            print(f"Error (insert_row_to_table): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -203,7 +203,7 @@ def insert_row_to_table(table_name, dict_columns_name_to_value):
 def generate_insert_query(dict_columns_name_to_value, table_name):
     prepare_sql_row_insert_syntax(dict_columns_name_to_value)
     columns_names = ",".join(dict_columns_name_to_value.keys())
-    values = ",".join(dict_columns_name_to_value.values())
+    values = ",".join([str(value) for value in dict_columns_name_to_value.values()])
     query = f"INSERT INTO {table_name} ({columns_names}) VALUES ({values})"
     return query
 
@@ -225,7 +225,7 @@ def dataframe_to_mysql_table(table_name, df):
             df.to_sql(table_name, con=sql_engine, if_exists='replace', index=False)
             print(f"Table {table_name} created successfully")
         except Error as e:
-            print(f"Error: {e}")
+            print(f"Error (dataframe_to_mysql_table): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -261,7 +261,7 @@ def run_query_in_manufuture_db(query, verbose=False):
                 print(query)
                 print(f"Query {query} executed successfully")
         except Error as e:
-            print(f"Error: {e}")
+            print(f"Error (run_query_in_manufuture_db): {e}")
         connection.commit()
         cursor.close()
         connection.close()
@@ -281,14 +281,14 @@ def run_queries_in_manufuture_db(queries, verbose=False):
                 print("Connected to MySQL database")
 
         cursor = connection.cursor()
-        try:
-            for query in queries:
+        for query in queries:
+            try:
                 cursor.execute(query)
                 if verbose:
                     print(query)
                     print(f"Query {query} executed successfully")
-        except Error as e:
-            print(f"Error: {e}")
+            except Error as e:
+                print(f"Error (run_queries_in_manufuture_db): {e}, query: {query}")
         connection.commit()
         cursor.close()
         connection.close()

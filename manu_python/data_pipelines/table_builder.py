@@ -6,12 +6,12 @@ from phpserialize import dict_to_list, loads
 
 from manu_python.config.config import COUNTRY_TO_ISO_MAP, MIN_NUM_BIDS_PER_MANUFACTURER, \
     MANUFACTURER_BID_LABEL_COLUMN_NAME
-from manu_python.db.dal import mysql_table_to_dataframe_without_connection
+from manu_python.db.dal import read_mysql_table_into_dataframe_without_connection
 
 
 def netsuite_prices(all_tables_df):
+    logging.info("Building netsuite_prices")
     netsuite_prices_df = pd.read_csv('/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/manufuture/netsuite_prices.csv')
-    netsuite_prices_df['average_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('mean')
     netsuite_prices_df['average_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('mean')
     netsuite_prices_df['min_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('min')
     netsuite_prices_df['max_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('max')
@@ -19,7 +19,7 @@ def netsuite_prices(all_tables_df):
     netsuite_prices_df['num_duplicates'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('count')
     all_tables_df['netsuite_prices'] = netsuite_prices_df
 
-    netsuite_agg = netsuite_prices_df.groupby('Memo').agg({'Rate': ['min', 'max', 'count'],
+    netsuite_agg = netsuite_prices_df.groupby('Memo').agg({'Rate': ['min', 'max', 'count', 'mean'],
                                                            'Quantity': ['min', 'max'],
                                                            'Currency': lambda x: ", ".join(list(x))})
     netsuite_agg.columns = [' '.join(col).strip() for col in netsuite_agg.columns.values]
@@ -121,11 +121,18 @@ def pam_label_by_project_requirements(all_tables_df, pam_table_name):
     return new_table_name
 
 
+def build_part_price_training_table(all_tables_df):
+    logging.info("Building part_price_training_table")
+    parts_with_netsuite_prices = all_tables_df['wp_type_part'][all_tables_df['wp_type_part']['Rate mean_netsuite'].notnull()]
+    parts_with_prices_and_werk = parts_with_netsuite_prices[parts_with_netsuite_prices['found_werk'] == 1]
+    all_tables_df['part_price_training_table'] = parts_with_prices_and_werk
+
 # Build pam + filter by project requirements
 def build_proj_manu_training_table(all_tables_df, min_num_manufacturer_bids):
     pam_th_table_name = pam_project_active_manufacturer(all_tables_df, min_num_manufacturer_bids)
     # pam_th_req_filter_table_name = pam_filter_by_project_requirements(all_tables_df, pam_th_table_name)
     pam_th_req_label_table_name = pam_label_by_project_requirements(all_tables_df, pam_th_table_name)
+    logging.warning("proj_manu_training_table_name: " + pam_th_req_label_table_name)
     return pam_th_req_label_table_name
 
 
@@ -179,20 +186,20 @@ def user_to_entity_rel(all_tables_df):
 # For each name, get the number of pages, list of material categorization logging_level 1,2,3 when not null
 def werk_by_result_name() -> pd.DataFrame:
     logging.info("Building werk_enrich: name, num_pages, material_categorization_level_1, material_categorization_level_2, material_categorization_level_3")
-    werk_df = mysql_table_to_dataframe_without_connection('werk')
-    werk_by_name_df = werk_df.groupby('name').agg(number_of_pages=('page_number', 'count'),
+    werk_df = read_mysql_table_into_dataframe_without_connection('werk')
+    werk_by_name_df = werk_df.groupby('name').agg(number_of_pages=('Page', 'count distinct'),
                                                   material_categorization_level_1_list=(
-                                                  'material_categorization_level_1', lambda x: process_method(x)),
+                                                  'material_categorization_level_1', lambda x: transform_to_comma_separated_str_set(x)),
                                                   material_categorization_level_2_list=(
-                                                  'material_categorization_level_2', lambda x: process_method(x)),
+                                                  'material_categorization_level_2', lambda x: transform_to_comma_separated_str_set(x)),
                                                   material_categorization_level_3_list=(
-                                                  'material_categorization_level_3', lambda x: process_method(x))
+                                                  'material_categorization_level_3', lambda x: transform_to_comma_separated_str_set(x))
                                                   )
     werk_by_name_df = werk_by_name_df.reset_index()
     return werk_by_name_df
 
 
-def process_method(x):
+def transform_to_comma_separated_str_set(x):
     return ", ".join(set([y if y is not None else 'None' for y in list(x)]))
 
 
@@ -233,8 +240,8 @@ def build_training_data_tables(all_tables_df):
     pm_project_manufacturer(all_tables_df)
     pam_project_active_manufacturer(all_tables_df, 1)
     ac_agency_manufacturer(all_tables_df)
-    proj_manu_training_table_name = build_proj_manu_training_table(all_tables_df, MIN_NUM_BIDS_PER_MANUFACTURER)
-    logging.warning("proj_manu_training_table_name: " + proj_manu_training_table_name)
+    build_proj_manu_training_table(all_tables_df, MIN_NUM_BIDS_PER_MANUFACTURER)
+    build_part_price_training_table(all_tables_df)
 
 
 def clean_wp_type_quote(all_tables_df):
@@ -273,6 +280,8 @@ def get_bids_from_row(bids_from_row) -> list:
 
 def clean_wp_type_part(all_tables_df):
     all_tables_df['wp_type_part']['unit_price'] = all_tables_df['wp_type_part']['unit_price'].fillna(-1).replace('', -1).astype('float')
+    # Replace Null or empty strinc coc values with 'None'
+    all_tables_df['wp_type_part']['coc'] = all_tables_df['wp_type_part']['coc'].fillna('None').replace('', 'None').astype('str')
 
 
 def clean_wp_manufacturers(all_tables_df):

@@ -1,4 +1,6 @@
 import logging
+import math
+
 import pandas as pd
 
 TABLES_TO_IGNORE_IN_SEARCH = ['wp_quotes', 'pm_project_manufacturer', 'pam_project_active_manufacturer_th_1']
@@ -124,3 +126,42 @@ def add_date_time_columns(row, columns_prefix, datetime_column):
         row[columns_prefix + '_year_month'] = (str(row[columns_prefix + '_year']) + "-" + str(row[columns_prefix + '_month']))
         row[columns_prefix + '_Ym'] = pd.to_datetime(row[columns_prefix + '_year_month'], format='%Y-%m').strftime('%Y-%m')
     return row
+
+
+def transform_to_comma_separated_str_set(x):
+    # if x is None or x is Nan or x is empty list, return None
+    if x is None or (isinstance(x, float) and math.isnan(x)) or (isinstance(x, list) and len(x) == 0):
+        return None
+    # For each value in x, if it is not None or Nan, add it to the set, then return the set as a comma separated string, make sure you return a set and not a list
+    ret_val =  ", ".join([str(y) for y in set([y for y in list(x) if y is not None and not (isinstance(y, float) and math.isnan(y))])])
+    return "[" + ret_val + "]"
+
+
+def bin_feature(feature_value, bins_arr):
+    bins_arr.sort()
+    if feature_value < bins_arr[0]:
+        return "<" + str(bins_arr[0])
+    for idx, bin_upper_bound in enumerate(bins_arr):
+        if feature_value < bin_upper_bound:
+            return "[" + str(bins_arr[idx - 1]) + "-" + str(bins_arr[idx]) + ")"
+    if feature_value >= bins_arr[-1]:
+        return ">=" + str(bins_arr[-1])
+    logging.warning("Error: could not bin feature value: " + str(feature_value) + " with bins: " + str(bins_arr))
+    # Throw an exception if we got here - we should never get here
+    raise Exception("Error: could not bin feature value: " + str(feature_value) + " with bins: " + str(bins_arr))
+
+
+def convert_str_set_to_float_set(str_set):
+    # if str_set is not string, throw exception
+    if not isinstance(str_set, str):
+        raise Exception("Error: str_set is not string: " + str(str_set))
+    if str_set is None or len(str_set) < 2:
+        return None
+    try:
+        elements = str_set[1:-1].split(',')
+        if elements == ['']:
+            return set()
+        return set(map(float, str_set[1:-1].split(',')))
+    except ValueError:
+        logging.warning("Error: could not convert str set to float set: " + str(str_set))
+        return None

@@ -7,6 +7,7 @@ from phpserialize import dict_to_list, loads
 from manu_python.config.config import COUNTRY_TO_ISO_MAP, MIN_NUM_BIDS_PER_MANUFACTURER, \
     MANUFACTURER_BID_LABEL_COLUMN_NAME
 from manu_python.db.dal import read_mysql_table_into_dataframe_without_connection
+from manu_python.utils.util_functions import transform_to_comma_separated_str_set
 
 
 def netsuite_prices(all_tables_df):
@@ -125,6 +126,8 @@ def build_part_price_training_table(all_tables_df):
     logging.info("Building part_price_training_table")
     parts_with_netsuite_prices = all_tables_df['wp_type_part'][all_tables_df['wp_type_part']['Rate mean_netsuite'].notnull()]
     parts_with_prices_and_werk = parts_with_netsuite_prices[parts_with_netsuite_prices['found_werk'] == 1]
+    # Filter out parts with volume <= 0
+    parts_with_prices_and_werk = parts_with_prices_and_werk[parts_with_prices_and_werk['max_enclosing_cuboid_volume'] > 0]
     all_tables_df['part_price_training_table'] = parts_with_prices_and_werk
 
 # Build pam + filter by project requirements
@@ -187,20 +190,23 @@ def user_to_entity_rel(all_tables_df):
 def werk_by_result_name() -> pd.DataFrame:
     logging.info("Building werk_enrich: name, num_pages, material_categorization_level_1, material_categorization_level_2, material_categorization_level_3")
     werk_df = read_mysql_table_into_dataframe_without_connection('werk')
-    werk_by_name_df = werk_df.groupby('name').agg(number_of_pages=('Page', 'count distinct'),
-                                                  material_categorization_level_1_list=(
-                                                  'material_categorization_level_1', lambda x: transform_to_comma_separated_str_set(x)),
-                                                  material_categorization_level_2_list=(
-                                                  'material_categorization_level_2', lambda x: transform_to_comma_separated_str_set(x)),
-                                                  material_categorization_level_3_list=(
-                                                  'material_categorization_level_3', lambda x: transform_to_comma_separated_str_set(x))
-                                                  )
+    werk_by_name_df = werk_df.groupby('name').agg(
+        number_of_pages=('Page', 'nunique')
+        , material_categorization_level_1_set=(
+            'material_categorization_level_1', lambda x: transform_to_comma_separated_str_set(x))
+        , material_categorization_level_2_set=(
+            'material_categorization_level_2', lambda x: transform_to_comma_separated_str_set(x))
+        , material_categorization_level_3_set=(
+            'material_categorization_level_3', lambda x: transform_to_comma_separated_str_set(x))
+        # number of values in 'nominal_size' that are not null or Nan or None
+        , number_of_nominal_sizes=('nominal_size', lambda x: len([y for y in list(x) if y is not None]))
+        , tolerance_01=('tolerance', lambda x: len([y for y in list(x) if y is not None and 0.1 <= y]))
+        , tolerance_001=('tolerance', lambda x: len([y for y in list(x) if y is not None and 0.01 <= y < 0.1]))
+        , tolerance_0001=('tolerance', lambda x: len([y for y in list(x) if y is not None and y < 0.01]))
+        , enclosing_cuboid_volumes_set=('enclosing_cuboid_volume', lambda x: transform_to_comma_separated_str_set(x))
+    )
     werk_by_name_df = werk_by_name_df.reset_index()
     return werk_by_name_df
-
-
-def transform_to_comma_separated_str_set(x):
-    return ", ".join(set([y if y is not None else 'None' for y in list(x)]))
 
 
 def clean_wp_type_tables(all_tables_df):
@@ -316,3 +322,6 @@ def clean_wp_parts(all_tables_df):
 
     all_tables_df['wp_parts'] = df
     return all_tables_df
+
+def display_max_enclosing_cuboid_volume_to_price(all_tables_df):
+    all_tables_df['part_price_training_table'].plot.scatter(x='enclosing_cuboid_volume', y='unit_price')

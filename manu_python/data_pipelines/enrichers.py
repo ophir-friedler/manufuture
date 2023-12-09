@@ -1,10 +1,12 @@
+import math
+
 import pandas as pd
 
 import logging
 
 from manu_python.config.config import PRICE_BUCKETS
 from manu_python.utils import util_functions
-from manu_python.utils.util_functions import parse_list_of_integers
+from manu_python.utils.util_functions import parse_list_of_integers, transform_to_comma_separated_str_set, bin_feature
 
 
 # Enrich wp_type_quote:
@@ -169,17 +171,6 @@ def enrich_wp_projects(all_tables_df):
     all_tables_df['wp_projects'] = df
 
 
-def bin_feature(feature_value, bins_arr):
-    bins_arr.sort()
-    if feature_value < bins_arr[0]:
-        return "<" + str(bins_arr[0])
-    for idx, bin_upper_bound in enumerate(bins_arr):
-        if feature_value < bin_upper_bound:
-            return "[" + str(bins_arr[idx - 1]) + "-" + str(bins_arr[idx]) + ")"
-    if feature_value >= bins_arr[-1]:
-        return ">=" + str(bins_arr[-1])
-
-
 def wp_projects_add_creation_date(all_tables_df):
     wp_posts = all_tables_df['wp_posts']
     project_to_creation_date_df = wp_posts[wp_posts['post_type'] == 'project'][['ID', 'post_date']]
@@ -189,7 +180,8 @@ def wp_projects_add_creation_date(all_tables_df):
 
 
 def enrich_wp_type_bid(all_tables_df):
-    all_tables_df['wp_type_bid']['is_chosen'] = all_tables_df['wp_type_bid']['bid_parts_0_won'].apply(lambda x: 1 if str(x) == str(1) else 0)
+    all_tables_df['wp_type_bid']['is_chosen'] = all_tables_df['wp_type_bid']['bid_parts_0_won'].apply(
+        lambda x: 1 if str(x) == str(1) else 0)
     # Parse year month day
     all_tables_df['wp_type_bid'] = util_functions.add_columns_year_month_day_from_datetime(
         all_tables_df['wp_type_bid'],
@@ -200,7 +192,8 @@ def enrich_wp_type_bid(all_tables_df):
 # Add netsuite prices to wp_type_part
 # Add werk data to wp_type_part
 def enrich_wp_type_part(all_tables_df):
-    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_agg'], how='left', left_on='name', right_on='Memo_netsuite')
+    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_agg'], how='left',
+                                                                        left_on='name', right_on='Memo_netsuite')
     all_tables_df['wp_type_part']['price_bucket'] = all_tables_df['wp_type_part']['unit_price'].apply(bucket_prices)
 
     # merge with werk_by_name table to get material categorization levels 1,2,3 for each part name in wp_type_part table
@@ -209,42 +202,212 @@ def enrich_wp_type_part(all_tables_df):
     # all_tables_df['wp_type_part']['found_werk'] = (all_tables_df['wp_type_part']['name'].notnull()).astype(int)
 
     # Calculate werk data for each part name in wp_type_part table
-    werk_data_for_parts_df = all_tables_df['wp_type_part'].apply(lambda row: calculate_werk_data_for_part(row['name'], all_tables_df['werk_by_name']), axis=1)
+    werk_data_for_parts_df = all_tables_df['wp_type_part'].apply(
+        lambda row: calculate_werk_data_for_part(row, all_tables_df['werk_by_name']), axis=1)
     all_tables_df['wp_type_part'] = pd.concat([all_tables_df['wp_type_part'], werk_data_for_parts_df], axis=1)
 
 
-def calculate_werk_data_for_part(part_name, werk_by_name_df):
+def get_first_material_categorization_level_1_set(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['material_categorization_level_1_set'].iloc[0]
+
+
+def get_first_material_categorization_level_2_set(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['material_categorization_level_2_set'].iloc[0]
+
+
+def get_first_material_categorization_level_3_set(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['material_categorization_level_3_set'].iloc[0]
+
+
+def get_average_number_of_nominal_sizes_bucketed(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return bin_feature(werk_data_for_name_df['number_of_nominal_sizes'].mean(), exponential_bins(10))
+
+
+def get_average_number_of_nominal_sizes(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['number_of_nominal_sizes'].mean()
+
+
+def get_average_tolerance_01(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['tolerance_01'].mean()
+
+
+def get_average_tolerance_001(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['tolerance_001'].mean()
+
+
+def get_average_tolerance_0001(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    if 'tolerance_0001' in werk_data_for_name_df.columns:
+        return werk_data_for_name_df['tolerance_0001'].mean()
+    else:
+        return None
+
+
+def get_average_tolerance_01_bucketed(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    if 'tolerance_01' in werk_data_for_name_df.columns:
+        return bin_feature(werk_data_for_name_df['tolerance_01'].mean(),
+                           exponential_bins(10))
+    else:
+        return None
+
+
+def get_average_tolerance_001_bucketed(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    if 'tolerance_001' in werk_data_for_name_df.columns:
+        return bin_feature(werk_data_for_name_df['tolerance_001'].mean(),
+                           exponential_bins(10))
+    else:
+        return None
+
+
+def get_average_tolerance_0001_bucketed(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    if 'tolerance_0001' in werk_data_for_name_df.columns:
+        return bin_feature(werk_data_for_name_df['tolerance_0001'].mean(),
+                           exponential_bins(10))
+    else:
+        return None
+
+
+def get_enclosing_cuboid_volumes_set_of_sets(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    if 'enclosing_cuboid_volumes_set' in werk_data_for_name_df.columns:
+        return transform_to_comma_separated_str_set(
+            werk_data_for_name_df['enclosing_cuboid_volumes_set'])
+    else:
+        return None
+
+
+def get_average_num_pages_per_result(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    if 'number_of_pages' in werk_data_for_name_df.columns:
+        return werk_data_for_name_df['number_of_pages'].mean()
+    else:
+        return None
+
+
+def calculate_werk_data_for_part(row, werk_by_name_df):
+    part_name = row['name']
     if part_name is None or pd.isnull(part_name) or len(part_name) == 0:
-        return pd.Series({'num_werk_results': 0
-                             , 'found_werk': 0
-                             , 'is_material_categorization_levels_same': None
-                                , 'first_material_categorization_level_1_list': None
-                                , 'first_material_categorization_level_2_list': None
-                                , 'first_material_categorization_level_3_list': None
-                             , 'average_num_pages_per_result': None
-                          })
+        werk_data_for_name_df = pd.DataFrame([])
+    else:
+        werk_data_for_name_df = werk_by_name_df[werk_by_name_df['name'].str.startswith(part_name)]
 
-    # Get all werk results that start with the part name
-    werk_data_for_name_df = werk_by_name_df[werk_by_name_df['name'].str.startswith(part_name)]
-
-    # Return the calculated values
     return pd.Series({'num_werk_results': len(werk_data_for_name_df)
                          , 'found_werk': 1 if len(werk_data_for_name_df) > 0 else 0
-                         , 'is_material_categorization_levels_same': is_material_categorization_levels_same(part_name, werk_data_for_name_df)
-                         , 'first_material_categorization_level_1_list' : werk_data_for_name_df['material_categorization_level_1_list'].iloc[0] if len(werk_data_for_name_df) > 0 else None
-                            , 'first_material_categorization_level_2_list' : werk_data_for_name_df['material_categorization_level_2_list'].iloc[0] if len(werk_data_for_name_df) > 0 else None
-                            , 'first_material_categorization_level_3_list' : werk_data_for_name_df['material_categorization_level_3_list'].iloc[0] if len(werk_data_for_name_df) > 0 else None
-                         , 'average_num_pages_per_result': werk_data_for_name_df['number_of_pages'].mean()
+                         , 'is_material_categorization_levels_same': is_material_categorization_levels_same(part_name,
+                                                                                                            werk_data_for_name_df)
+                         , 'first_material_categorization_level_1_set':
+                          get_first_material_categorization_level_1_set(werk_data_for_name_df)
+                         , 'first_material_categorization_level_2_set':
+                          get_first_material_categorization_level_2_set(werk_data_for_name_df)
+                         , 'first_material_categorization_level_3_set':
+                          get_first_material_categorization_level_3_set(werk_data_for_name_df)
+                         , 'average_number_of_nominal_sizes_bucketed': get_average_number_of_nominal_sizes_bucketed(
+            werk_data_for_name_df)
+                         , 'average_number_of_nominal_sizes': get_average_number_of_nominal_sizes(werk_data_for_name_df)
+                         , 'average_tolerance_01': get_average_tolerance_01(werk_data_for_name_df)
+                         , 'average_tolerance_001': get_average_tolerance_001(werk_data_for_name_df)
+                         , 'average_tolerance_0001': get_average_tolerance_0001(werk_data_for_name_df)
+                         , 'average_tolerance_01_bucketed': get_average_tolerance_01_bucketed(werk_data_for_name_df)
+                         , 'average_tolerance_001_bucketed': get_average_tolerance_001_bucketed(werk_data_for_name_df)
+                         , 'average_tolerance_0001_bucketed': get_average_tolerance_0001_bucketed(werk_data_for_name_df)
+                         , 'max_enclosing_cuboid_volume': get_max_enclosing_cuboid_volume(werk_data_for_name_df)
+                         , 'log_max_enclosing_cuboid_volume': get_log_max_enclosing_cuboid_volume(werk_data_for_name_df)
+                         , 'cube_root_max_enclosing_cuboid_volume': get_cube_root_max_enclosing_cuboid_volume(werk_data_for_name_df)
+                         , 'max_enclosing_cuboid_volume_bucketed': get_max_enclosing_cuboid_volume_bucketed(werk_data_for_name_df)
+                         , 'enclosing_cuboid_volumes_set_of_sets': get_enclosing_cuboid_volumes_set_of_sets(
+            werk_data_for_name_df)
+                         , 'average_num_pages_per_result': get_average_num_pages_per_result(werk_data_for_name_df)}
+                     )
 
-                      })
+
+def get_max_enclosing_cuboid_volume_bucketed(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0 or ('enclosing_cuboid_volumes_set' not in werk_data_for_name_df.columns):
+        return bin_feature(0, exponential_bins(25))
+    try:
+        ret_val = werk_data_for_name_df['enclosing_cuboid_volumes_set'].apply(
+            lambda x: max(util_functions.convert_str_set_to_float_set(x), default=0))
+        if len(ret_val) == 0:
+            logging.error("ret_val is empty" + werk_data_for_name_df['enclosing_cuboid_volumes_set'])
+            raise ValueError
+        return bin_feature(ret_val.max(), exponential_bins(25))
+    except ValueError:
+        logging.error(werk_data_for_name_df['enclosing_cuboid_volumes_set'])
+
+
+def get_log_max_enclosing_cuboid_volume(werk_data_for_name_df):
+    ret_val = get_max_enclosing_cuboid_volume(werk_data_for_name_df)
+    if ret_val <= 0:
+        return -999999
+    return math.log(ret_val)
+
+
+def get_cube_root_max_enclosing_cuboid_volume(werk_data_for_name_df):
+    ret_val = get_max_enclosing_cuboid_volume(werk_data_for_name_df)
+    return math.pow(ret_val, 1/3)
+
+
+def get_log_log_max_enclosing_cuboid_volume(werk_data_for_name_df):
+    ret_val = get_max_enclosing_cuboid_volume(werk_data_for_name_df)
+    if ret_val <= 0:
+        return -999999
+    return math.log(math.log(ret_val))
+
+
+def get_max_enclosing_cuboid_volume(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0 or ('enclosing_cuboid_volumes_set' not in werk_data_for_name_df.columns):
+        return 0
+    try:
+        ret_val = werk_data_for_name_df['enclosing_cuboid_volumes_set'].apply(
+            lambda x: max(util_functions.convert_str_set_to_float_set(x), default=0))
+        if len(ret_val) == 0:
+            raise ValueError("ret_val is empty" + werk_data_for_name_df['enclosing_cuboid_volumes_set'])
+        return ret_val.max()
+    except ValueError:
+        logging.error(werk_data_for_name_df['enclosing_cuboid_volumes_set'])
+
+
+def exponential_bins(exp_range):
+    return [0] + [2 ** i for i in range(0, exp_range)]
+
+
+def is_enclosing_cuboid_volumes_list_same(name, werk_data_for_name_df):
+    if name is None or pd.isnull(name) or len(name) == 0:
+        return None
+    if len(werk_data_for_name_df['enclosing_cuboid_volumes_set'].unique()) == 1:
+        return 1
+    else:
+        return 0
 
 
 def is_material_categorization_levels_same(name, werk_data_for_name_df):
     if name is None or pd.isnull(name) or len(name) == 0:
         return None
-    if len(werk_data_for_name_df['material_categorization_level_1_list'].unique()) == 1 and \
-            len(werk_data_for_name_df['material_categorization_level_2_list'].unique()) == 1 and \
-            len(werk_data_for_name_df['material_categorization_level_3_list'].unique()) == 1:
+    if len(werk_data_for_name_df['material_categorization_level_1_set'].unique()) == 1 and \
+            len(werk_data_for_name_df['material_categorization_level_2_set'].unique()) == 1 and \
+            len(werk_data_for_name_df['material_categorization_level_3_set'].unique()) == 1:
         return 1
     else:
         return 0
@@ -252,7 +415,7 @@ def is_material_categorization_levels_same(name, werk_data_for_name_df):
 
 def bucket_prices(unit_price):
     for index, val in enumerate(PRICE_BUCKETS):
-        if index == len(PRICE_BUCKETS) -1:
+        if index == len(PRICE_BUCKETS) - 1:
             if unit_price >= val:
                 return len(PRICE_BUCKETS)
         if unit_price < val:

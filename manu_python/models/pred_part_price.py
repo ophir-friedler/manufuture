@@ -22,19 +22,36 @@ class PartPricePredictor:
 
     _all_part_features = [
         # ## Part features
-        'coc'
-        , 'first_material_categorization_level_1_list'
-        , 'first_material_categorization_level_2_list'
-        , 'first_material_categorization_level_3_list'
+        # 'coc'
+        # , 'first_material_categorization_level_1_set'
+        # , 'first_material_categorization_level_2_set'
+        # , 'first_material_categorization_level_3_set'
+        # , 'average_number_of_nominal_sizes'
+        # , 'average_number_of_nominal_sizes_bucketed'
+        # , 'average_tolerance_01'
+        # , 'average_tolerance_01_bucketed'
+        # , 'average_tolerance_001_bucketed'
+        # , 'average_tolerance_0001_bucketed'
+        # ,
+        'max_enclosing_cuboid_volume_bucketed'
+
 
     ]
 
     _selected_singles = [
         # ## Part features
-        'coc'
-        , 'first_material_categorization_level_1_list'
-        , 'first_material_categorization_level_2_list'
-        , 'first_material_categorization_level_3_list'
+        # 'coc'
+        # , 'first_material_categorization_level_1_set'
+        # , 'first_material_categorization_level_2_set'
+        # , 'first_material_categorization_level_3_set'
+        # , 'average_number_of_nominal_sizes'
+        # , 'average_number_of_nominal_sizes_bucketed'
+        # , 'average_tolerance_01'
+        # , 'average_tolerance_01_bucketed'
+        # , 'average_tolerance_001_bucketed'
+        # , 'average_tolerance_0001_bucketed'
+        # ,
+        'max_enclosing_cuboid_volume_bucketed'
 
     ]
     _selected_doubles = [
@@ -159,6 +176,7 @@ class PartPricePredictor:
         return self.model_predict(prepared_row)
 
     def price_predictions_for_all_feature_combinations(self, all_tables_df, csv_filename):
+        print("Started price_predictions_for_all_feature_combinations")
         # collect all feature values for all features, and then create a cartesian product of all feature values
         all_values = {}
         for feature in self._all_part_features:
@@ -172,6 +190,9 @@ class PartPricePredictor:
             predict_rows = pd.concat([pd.DataFrame(part_features_map), predict_rows], axis=1)
             ret_df = pd.concat([ret_df, predict_rows])
         ret_df.to_csv(csv_filename)
+        # display a graph that shows the distribution of prices as a function of tolerance_bucketed
+        # sns.scatterplot(data=ret_df, x='average_tolerance_01_bucketed', y='pred_price')
+
 
 
     def add_manufacturers_columns_to_predict_rows(self, all_tables_df, predict_rows, manufacturers_extra_columns):

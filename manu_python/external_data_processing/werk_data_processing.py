@@ -38,20 +38,23 @@ def extract_features_form_werk_results_dir(results_dir):
     page_to_data_dict = extract_page_to_data_dict(results_dir)
 
     list_of_dict_werk_column_name_to_value = []
-    for page_dir, data_dict in page_to_data_dict.items():
-        page_title_block_column_name_to_value = build_title_block_column_to_value_dict(data_dict, page_dir, part_name,
+    for page_dir, page_data_dict in page_to_data_dict.items():
+        page_title_block_column_name_to_value = build_title_block_column_to_value_dict(page_data_dict, page_dir, part_name,
                                                                                        results_dir)
         list_of_dict_werk_column_name_to_value.append(page_title_block_column_name_to_value)
-        for sheet_dir, data_dict in data_dict.items():
+        for sheet_dir, sheet_data_dict in page_data_dict.items():
             if sheet_dir == 'title_block':
                 continue
-            for canvas_dir, data_dict in data_dict.items():
-                for sectional_dir, data_dict in data_dict.items():
-                    sectional_measures_list = data_dict['sectional_measures']
+            for canvas_dir, canvas_data_dict in sheet_data_dict.items():
+                canvas_external_dimensions_column_name_to_value = build_canvas_external_dimensions_column_name_to_value(
+                    canvas_dir, canvas_data_dict, page_title_block_column_name_to_value, sheet_dir)
+                list_of_dict_werk_column_name_to_value.append(canvas_external_dimensions_column_name_to_value)
+                for sectional_dir, sectional_data_dict in canvas_data_dict.items():
+                    if sectional_dir == 'External_Dimensions':
+                        continue
+                    sectional_measures_list = sectional_data_dict['sectional_measures']
                     for index, measure in enumerate(sectional_measures_list):
-                        dict_werk_column_name_to_value = page_title_block_column_name_to_value.copy()
-                        dict_werk_column_name_to_value['Sheet'] = sheet_dir
-                        dict_werk_column_name_to_value['Canvas'] = canvas_dir
+                        dict_werk_column_name_to_value = canvas_external_dimensions_column_name_to_value.copy()
                         dict_werk_column_name_to_value['Sectional'] = sectional_dir
                         dict_werk_column_name_to_value['Item'] = index
                         dict_werk_column_name_to_value['nominal_size'] = float(measure.label.size.nominal_size)
@@ -68,10 +71,32 @@ def extract_features_form_werk_results_dir(results_dir):
                                 dict_werk_column_name_to_value['size_tolerance_deviation_upper'] = float(measure.label.size_tolerance.deviation_upper)
                             else:
                                 dict_werk_column_name_to_value['size_tolerance_deviation_upper'] = None
+                        # if size_tolerance_deviation_lower and size_tolerance_deviation_upper are both not null, then calculate the difference into 'tolerance'
+                        if dict_werk_column_name_to_value['size_tolerance_deviation_lower'] is not None \
+                                and dict_werk_column_name_to_value['size_tolerance_deviation_upper'] is not None:
+                            dict_werk_column_name_to_value['tolerance'] = dict_werk_column_name_to_value['size_tolerance_deviation_upper'] - dict_werk_column_name_to_value['size_tolerance_deviation_lower']
                         list_of_dict_werk_column_name_to_value.append(dict_werk_column_name_to_value)
 
 
     return list_of_dict_werk_column_name_to_value
+
+
+# Resuts -> Page -> Sheet -> Canvas -> External_Dimensions.json -> enclosing_cuboid -> depth, height, width
+def build_canvas_external_dimensions_column_name_to_value(canvas_dir, data_dict, page_title_block_column_name_to_value,
+                                                          sheet_dir):
+    external_dimensions_dict = data_dict['External_Dimensions']
+    canvas_external_dimensions_column_name_to_value = page_title_block_column_name_to_value.copy()
+    canvas_external_dimensions_column_name_to_value['Sheet'] = sheet_dir
+    canvas_external_dimensions_column_name_to_value['Canvas'] = canvas_dir
+    # if enclosing_cuboid is null, then print nulls for all enclosing_cuboid columns
+    if external_dimensions_dict['enclosing_cuboid'] is None:
+        canvas_external_dimensions_column_name_to_value['enclosing_cuboid_volume'] = None
+    else:
+        canvas_external_dimensions_column_name_to_value['enclosing_cuboid_volume'] = \
+            external_dimensions_dict['enclosing_cuboid']['depth'] * \
+            external_dimensions_dict['enclosing_cuboid']['height'] * \
+            external_dimensions_dict['enclosing_cuboid']['width']
+    return canvas_external_dimensions_column_name_to_value
 
 
 def build_title_block_column_to_value_dict(data_dict, page_dir, part_name, results_dir):
@@ -105,6 +130,7 @@ def extract_page_to_data_dict(results_dir) -> dict:
             for canvas_dir in get_all_directories_with_prefix(full_path_sheet_dir, "Canvas"):
                 full_path_canvas_dir = os.path.join(full_path_sheet_dir, canvas_dir)
                 page_to_data_dict[page_dir][sheet_dir][canvas_dir] = {}
+                page_to_data_dict[page_dir][sheet_dir][canvas_dir]['External_Dimensions'] = extract_canvas_external_dimensions(full_path_canvas_dir)
                 for sectional_dir in get_all_directories_with_prefix(full_path_canvas_dir, "Sectional"):
                     full_path_sectional_dir = os.path.join(full_path_canvas_dir, sectional_dir)
                     page_to_data_dict[page_dir][sheet_dir][canvas_dir][sectional_dir] = {}
@@ -116,6 +142,13 @@ def extract_page_to_data_dict(results_dir) -> dict:
                             sectional_measures_list.append(measure)
                     page_to_data_dict[page_dir][sheet_dir][canvas_dir][sectional_dir]['sectional_measures'] = sectional_measures_list
     return page_to_data_dict
+
+
+def extract_canvas_external_dimensions(full_path_canvas_dir):
+    # parse json in External_Dimensions.json that is in canvas_dir and extract the data
+    with open(os.path.join(full_path_canvas_dir, "External_Dimensions.json")) as json_data:
+        data_dict = json.load(json_data)
+        return data_dict
 
 
 def get_all_directories_with_prefix(full_path_dir, prefix):
@@ -145,5 +178,8 @@ def build_werk_table():
         , 'nominal_size': 'FLOAT'
         , 'size_tolerance_deviation_lower': 'FLOAT'
         , 'size_tolerance_deviation_upper': 'FLOAT'
+        , 'tolerance': 'FLOAT'
+        , 'enclosing_cuboid_volume': 'FLOAT'
+
     }
     dal.add_columns_to_table('werk', dict_werk_column_name_to_type)

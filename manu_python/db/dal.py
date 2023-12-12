@@ -20,10 +20,11 @@ EMAIL_LOGS_DIR = '/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/logs
 def read_mysql_table_into_dataframe_without_connection(table_name) -> pd.DataFrame:
     sql_engine = create_engine(DB_CONNECTION_STRING)  # , pool_recycle=3600
     db_connection = sql_engine.connect()
-    return pd.read_sql(f'SELECT * FROM ' + table_name, db_connection)
+    return mysql_table_to_dataframe(table_name, db_connection)
+
 
 def mysql_table_to_dataframe(table_name, db_connection) -> pd.DataFrame:
-    return pd.read_sql(f'SELECT * FROM ' + table_name, db_connection)
+    return pd.read_sql(f'SELECT * FROM `' + table_name + '`', db_connection)
 
 
 def get_db_connection():
@@ -209,7 +210,7 @@ def generate_insert_query(dict_columns_name_to_value, table_name):
 
 
 # Get a dataframe, and build a mysql table from it according to the dataframe's name and columns
-def dataframe_to_mysql_table(table_name, df):
+def dataframe_to_mysql_table(table_name, table_df):
     try:
         connection = mysql.connector.connect(host=MYSQL_HOST,
                                              database=MYSQL_MANUFUTURE_DB,
@@ -222,7 +223,7 @@ def dataframe_to_mysql_table(table_name, df):
         cursor = connection.cursor()
         try:
             sql_engine = create_engine(DB_CONNECTION_STRING)
-            df.to_sql(table_name, con=sql_engine, if_exists='replace', index=False)
+            table_df.to_sql(table_name, con=sql_engine, if_exists='replace', index=False)
             print(f"Table {table_name} created successfully")
         except Error as e:
             print(f"Error (dataframe_to_mysql_table): {e}")

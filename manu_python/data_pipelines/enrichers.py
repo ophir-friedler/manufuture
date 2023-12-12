@@ -192,14 +192,11 @@ def enrich_wp_type_bid(all_tables_df):
 # Add netsuite prices to wp_type_part
 # Add werk data to wp_type_part
 def enrich_wp_type_part(all_tables_df):
-    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_agg'], how='left',
+    all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['netsuite_by_memo'], how='left',
                                                                         left_on='name', right_on='Memo_netsuite')
     all_tables_df['wp_type_part']['price_bucket'] = all_tables_df['wp_type_part']['unit_price'].apply(bucket_prices)
-
-    # merge with werk_by_name table to get material categorization levels 1,2,3 for each part name in wp_type_part table
-    # This is only for the case where the part name is exactly the same as the result name
-    # all_tables_df['wp_type_part'] = all_tables_df['wp_type_part'].merge(all_tables_df['werk_by_name'], how='left', left_on='name', right_on='name')
-    # all_tables_df['wp_type_part']['found_werk'] = (all_tables_df['wp_type_part']['name'].notnull()).astype(int)
+    all_tables_df['wp_type_part']['quantity_bucket'] = all_tables_df['wp_type_part'].apply(
+        lambda row: bin_feature(row['quantity'], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100, 500]), axis=1)
 
     # Calculate werk data for each part name in wp_type_part table
     werk_data_for_parts_df = all_tables_df['wp_type_part'].apply(
@@ -241,6 +238,12 @@ def get_average_tolerance_01(werk_data_for_name_df):
     if len(werk_data_for_name_df) == 0:
         return None
     return werk_data_for_name_df['tolerance_01'].mean()
+
+
+def get_average_tolerance(werk_data_for_name_df):
+    if len(werk_data_for_name_df) == 0:
+        return None
+    return werk_data_for_name_df['average_tolerance'].mean()
 
 
 def get_average_tolerance_001(werk_data_for_name_df):
@@ -327,6 +330,7 @@ def calculate_werk_data_for_part(row, werk_by_name_df):
                          , 'average_number_of_nominal_sizes_bucketed': get_average_number_of_nominal_sizes_bucketed(
             werk_data_for_name_df)
                          , 'average_number_of_nominal_sizes': get_average_number_of_nominal_sizes(werk_data_for_name_df)
+                         , 'average_tolerance': get_average_tolerance(werk_data_for_name_df)
                          , 'average_tolerance_01': get_average_tolerance_01(werk_data_for_name_df)
                          , 'average_tolerance_001': get_average_tolerance_001(werk_data_for_name_df)
                          , 'average_tolerance_0001': get_average_tolerance_0001(werk_data_for_name_df)

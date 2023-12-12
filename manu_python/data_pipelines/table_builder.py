@@ -6,12 +6,15 @@ from phpserialize import dict_to_list, loads
 
 from manu_python.config.config import COUNTRY_TO_ISO_MAP, MIN_NUM_BIDS_PER_MANUFACTURER, \
     MANUFACTURER_BID_LABEL_COLUMN_NAME
-from manu_python.db.dal import read_mysql_table_into_dataframe_without_connection
+from manu_python.db.dal import read_mysql_table_into_dataframe_without_connection, generate_insert_query, \
+    run_queries_in_manufuture_db, dataframe_to_mysql_table
+from manu_python.external_data_processing.werk_data_processing import build_werk_table, \
+    process_all_werk_results_dirs_to_df
 from manu_python.utils.util_functions import transform_to_comma_separated_str_set
 
 
-def netsuite_prices(all_tables_df):
-    logging.info("Building netsuite_prices")
+def build_netsuite_by_memo(all_tables_df):
+    logging.info("Building netsuite_by_memo")
     netsuite_prices_df = pd.read_csv('/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/manufuture/netsuite_prices.csv')
     netsuite_prices_df['average_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('mean')
     netsuite_prices_df['min_Rate'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('min')
@@ -20,20 +23,21 @@ def netsuite_prices(all_tables_df):
     netsuite_prices_df['num_duplicates'] = netsuite_prices_df.groupby('Memo')['Rate'].transform('count')
     all_tables_df['netsuite_prices'] = netsuite_prices_df
 
-    netsuite_agg = netsuite_prices_df.groupby('Memo').agg({'Rate': ['min', 'max', 'count', 'mean'],
+    netsuite_by_memo = netsuite_prices_df.groupby('Memo').agg({'Rate': ['min', 'max', 'count', 'mean'],
                                                            'Quantity': ['min', 'max'],
                                                            'Currency': lambda x: ", ".join(list(x))})
-    netsuite_agg.columns = [' '.join(col).strip() for col in netsuite_agg.columns.values]
-    netsuite_agg = netsuite_agg.reset_index()
-    netsuite_agg = netsuite_agg.add_suffix('_netsuite')
-    all_tables_df['netsuite_agg'] = netsuite_agg
+    netsuite_by_memo.columns = [' '.join(col).strip() for col in netsuite_by_memo.columns.values]
+    netsuite_by_memo = netsuite_by_memo.reset_index()
+    netsuite_by_memo = netsuite_by_memo.add_suffix('_netsuite')
+    all_tables_df['netsuite_by_memo'] = netsuite_by_memo
 
 
-def get_wp_tables_by_post_type(all_tables_df):
+def build_wp_tables_by_post_type(all_tables_df):
     all_post_types = list(all_tables_df['wp_posts']['post_type'].unique())
     wp_posts = all_tables_df['wp_posts']
     wp_postmeta = all_tables_df['wp_postmeta']
     for post_type in all_post_types:
+        print("Building wp_type_" + post_type)
         wp_type_posttype = 'wp_type_' + post_type
         wp_posts_post_type = wp_posts[wp_posts['post_type'] == post_type]
         wp_postmeta_post_type = wp_postmeta[(wp_postmeta['post_id'].isin(list(wp_posts_post_type['ID'])))
@@ -43,6 +47,7 @@ def get_wp_tables_by_post_type(all_tables_df):
         all_tables_df[wp_type_posttype] = all_tables_df[wp_type_posttype].merge(wp_posts_post_type, left_on='post_id',
                                                                                 right_on='ID').drop(
             columns=['ID', 'post_type'])
+
     clean_wp_type_tables(all_tables_df)
 
 
@@ -174,7 +179,7 @@ def extract_user_info_from_wp_usermeta(user_id_group):
 
 # Dependencies: all_tables_df['wp_usermeta']
 # user type (manufacturer, agency), post_id of user type, status (of manufacturer - vendor/pending_vendor)
-def user_to_entity_rel(all_tables_df):
+def build_user_to_entity_rel(all_tables_df):
     logging.info("Building user_to_entity_rel: user_id, user_type, user_type_post_id, user_type_status")
 
     # group wp_usermeta by user_id and apply the extract_user_info_from_wp_usermeta function
@@ -200,6 +205,8 @@ def werk_by_result_name() -> pd.DataFrame:
             'material_categorization_level_3', lambda x: transform_to_comma_separated_str_set(x))
         # number of values in 'nominal_size' that are not null or Nan or None
         , number_of_nominal_sizes=('nominal_size', lambda x: len([y for y in list(x) if y is not None]))
+        , average_tolerance=('tolerance', lambda x: sum([y for y in list(x) if y is not None]) / len(
+            [y for y in list(x) if y is not None]))
         , tolerance_01=('tolerance', lambda x: len([y for y in list(x) if y is not None and 0.1 <= y]))
         , tolerance_001=('tolerance', lambda x: len([y for y in list(x) if y is not None and 0.01 <= y < 0.1]))
         , tolerance_0001=('tolerance', lambda x: len([y for y in list(x) if y is not None and y < 0.01]))
@@ -220,6 +227,7 @@ def clean_wp_type_tables(all_tables_df):
     clean_wp_type_part(all_tables_df)
     clean_wp_type_bid(all_tables_df)
     clean_wp_type_manufacturer(all_tables_df)
+    clean_wp_type_agency(all_tables_df)
 
 
 def digit_array_of_digits_transform(digit_or_string):
@@ -234,12 +242,30 @@ def digit_array_of_digits_transform(digit_or_string):
     logging.error("Should not ever reach nere, parsing error in some table, column")
 
 
-def build_raw_data_tables(all_tables_df):
+def build_raw_data_tables(all_tables_df, from_scratch=True):
     clean_wp_manufacturers(all_tables_df)
     clean_wp_parts(all_tables_df)
-    get_wp_tables_by_post_type(all_tables_df)
-    user_to_entity_rel(all_tables_df)
-    netsuite_prices(all_tables_df)
+    if from_scratch:
+        build_wp_tables_by_post_type(all_tables_df)
+        build_user_to_entity_rel(all_tables_df)
+        build_netsuite_by_memo(all_tables_df)
+        # write tables to manufutre db using mysql to db function without connection
+        # write_tables_to_mysql(all_tables_df)
+
+    else:
+        # read all mysql tables that start with wp_type_XXXX from mysql db into all_tables_df dictionary
+        for table_name in run_queries_in_manufuture_db("show tables like 'wp_type_%'"):
+            all_tables_df[table_name] = read_mysql_table_into_dataframe_without_connection(table_name)
+            # read user_to_entity_rel, netsuite_by_memo, netsuite_prices from mysql db into all_tables_df dictionary
+        for table_name in ['user_to_entity_rel', 'netsuite_by_memo', 'netsuite_prices']:
+            all_tables_df[table_name] = read_mysql_table_into_dataframe_without_connection(table_name)
+
+
+def write_tables_to_mysql(all_tables_df):
+    for table_name, table_df in all_tables_df.items():
+        if table_name not in ['wp_posts', 'wp_postmeta', 'wp_usermeta', 'wp_users', 'wp_manufacturers', 'wp_parts',
+                              'wp_options']:
+            dataframe_to_mysql_table(table_name=table_name, table_df=table_df)
 
 
 def build_training_data_tables(all_tables_df):
@@ -260,6 +286,11 @@ def clean_wp_type_quote(all_tables_df):
     df['chosen_bids'] = df['chosen_bids'].apply(get_bids_from_row)
     all_tables_df['wp_type_quote'] = df
     return all_tables_df
+
+
+def clean_wp_type_agency(all_tables_df):
+    # fill all_tables_df['wp_type_agency'] Nones with empty string in all columns
+    all_tables_df['wp_type_agency'] = all_tables_df['wp_type_agency'].fillna('').astype('str')
 
 
 def clean_wp_type_manufacturer(all_tables_df):
@@ -288,6 +319,8 @@ def clean_wp_type_part(all_tables_df):
     all_tables_df['wp_type_part']['unit_price'] = all_tables_df['wp_type_part']['unit_price'].fillna(-1).replace('', -1).astype('float')
     # Replace Null or empty strinc coc values with 'None'
     all_tables_df['wp_type_part']['coc'] = all_tables_df['wp_type_part']['coc'].fillna('None').replace('', 'None').astype('str')
+    all_tables_df['wp_type_part']['quantity'] = all_tables_df['wp_type_part']['quantity'].fillna(-1).astype('int')
+
 
 
 def clean_wp_manufacturers(all_tables_df):
@@ -323,5 +356,15 @@ def clean_wp_parts(all_tables_df):
     all_tables_df['wp_parts'] = df
     return all_tables_df
 
+
 def display_max_enclosing_cuboid_volume_to_price(all_tables_df):
     all_tables_df['part_price_training_table'].plot.scatter(x='enclosing_cuboid_volume', y='unit_price')
+
+
+def build_werk_from_starting_directory(starting_dir):
+    build_werk_table()
+    all_results_list = process_all_werk_results_dirs_to_df(starting_dir)
+    insert_statements = [generate_insert_query(dict_werk_column_name_to_value, 'werk') for dict_werk_column_name_to_value in all_results_list]
+    run_queries_in_manufuture_db(insert_statements)
+    werk_by_name_df = werk_by_result_name()
+    dataframe_to_mysql_table(table_name='werk_by_name', table_df=werk_by_name_df)

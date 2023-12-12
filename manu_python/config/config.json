@@ -3,6 +3,7 @@
   "MODEL_FILE_NAME": "model__deep_v0__T__experiment_1_training_data.h5",
   "MANUFACTURERS_DATA_DF_FILE_NAME": "manufacturers_data_df.parquet",
   "X_TRAIN_TWO_ROWS_FILE_NAME": "x_train_two_rows.parquet",
+  "_MODEL_INPUT_COLUMNS_FILE_NAME": "model_input_columns.parquet",
   "ALL_MANUFACTURER_FEATURES": ["post_id_manuf", "sheet_metal_inserts", "sheet_metal_weldings", "sheet_metal_punching"
   , "employees_num", "country"],
   "ALL_PROJECT_FEATURES": [

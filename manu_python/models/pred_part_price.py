@@ -155,12 +155,18 @@ class PartPricePredictor:
                 self._model.evaluate(X_test, y_test, verbose=2)
                 # Make predictions on evaluation data
                 predictions = self._model.predict(X_test)
-                # Calculate the ratio between actual values and predictions, and cap it at 10
-                ratio = [min(10, actual / predicted) for actual, predicted in zip(y_test, predictions)]
+                # Calculate the ratio between actual values and predictions
+                ratio = y_test / predictions.flatten()
+                # Calculate the ratio between the predicted values and the actual values
+                ratio_inv = predictions.flatten() / y_test
+                # for each sample, take the max of the two ratios
+                ratio = ratio.apply(lambda x: max(x, 1 / x))
+                # cap ratio values at 10
+                ratio = ratio.apply(lambda x: 10 if x > 10 else x)
 
                 # Visualize the distribution of the ratio
                 plt.figure(figsize=(10, 6))
-                sns.histplot(ratio, bins=30, kde=True)
+                sns.histplot(ratio, bins=100, kde=True)
                 plt.title('Distribution of Ratio (Actual / Predicted)')
                 plt.xlabel('Ratio')
                 plt.ylabel('Frequency')

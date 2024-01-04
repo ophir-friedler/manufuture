@@ -9,7 +9,6 @@ print("Starting to build manufacturer bid submission predictor")
 # recommendations for one project
 MAX_RECOMMENDATIONS = 20
 
-MODEL_TYPE = 'deep_v0'  # lr, deep_v0
 MODEL_NAME = 'num_parts_and_total_quantity'
 MODEL_CSV_FILEPATH = '/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/manu_python/model_storage' \
                      '/manufacturers_for_project_' + MODEL_TYPE + '_' + MODEL_NAME + '_' + str(MAX_RECOMMENDATIONS) + \
@@ -24,7 +23,6 @@ all_tables_df = manu_python.manu_main.get_all_tables_df()
 
 bidSubmissionPredictor = pred_manufacturer_project_bid_submission.BidSubmissionPredictor()
 bidSubmissionPredictor.build_model(all_tables_df=all_tables_df,
-                                   model_type=MODEL_TYPE,
                                    verbose=True
                                    )
 

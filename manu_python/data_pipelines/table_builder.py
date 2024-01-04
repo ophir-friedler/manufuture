@@ -6,10 +6,10 @@ from phpserialize import dict_to_list, loads
 
 from manu_python.config.config import COUNTRY_TO_ISO_MAP, MIN_NUM_BIDS_PER_MANUFACTURER, \
     MANUFACTURER_BID_LABEL_COLUMN_NAME
+from manu_python.db import dal
 from manu_python.db.dal import read_mysql_table_into_dataframe_without_connection, generate_insert_query, \
     run_queries_in_manufuture_db, dataframe_to_mysql_table
-from manu_python.external_data_processing.werk_data_processing import build_werk_table, \
-    process_all_werk_results_dirs_to_df
+from manu_python.external_data_processing.werk_data_processing import process_all_werk_results_dirs_to_df
 from manu_python.utils.util_functions import transform_to_comma_separated_str_set
 
 
@@ -67,6 +67,7 @@ def pm_project_manufacturer(all_tables_df):
     pm_df = pm_df.merge(wp_manufacturers, how='cross', suffixes=('_quote', '_manuf'))
 
     # Clean columns data
+    # TODO: move standardize_country_values to write to a new column 'country_iso'
     standardize_country_values(pm_df)
 
     # build Label column
@@ -134,6 +135,7 @@ def build_part_price_training_table(all_tables_df):
     # Filter out parts with volume <= 0
     parts_with_prices_and_werk = parts_with_prices_and_werk[parts_with_prices_and_werk['max_enclosing_cuboid_volume'] > 0]
     all_tables_df['part_price_training_table'] = parts_with_prices_and_werk
+
 
 # Build pam + filter by project requirements
 def build_proj_manu_training_table(all_tables_df, min_num_manufacturer_bids):
@@ -269,6 +271,7 @@ def write_tables_to_mysql(all_tables_df):
 
 
 def build_training_data_tables(all_tables_df):
+    logging.info("Building training data tables")
     pm_project_manufacturer(all_tables_df)
     pam_project_active_manufacturer(all_tables_df, 1)
     ac_agency_manufacturer(all_tables_df)
@@ -368,3 +371,27 @@ def build_werk_from_starting_directory(starting_dir):
     run_queries_in_manufuture_db(insert_statements)
     werk_by_name_df = werk_by_result_name()
     dataframe_to_mysql_table(table_name='werk_by_name', table_df=werk_by_name_df)
+
+
+def build_werk_table():
+    dal.drop_table('werk')
+    dal.create_table('werk')
+    dict_werk_column_name_to_type = {
+        'name': 'VARCHAR(255)'
+        , 'result_dir_full_path': 'VARCHAR(255)'
+        , 'Page': 'VARCHAR(255)'
+        , 'material_categorization_level_1': 'VARCHAR(255)'
+        , 'material_categorization_level_2': 'VARCHAR(255)'
+        , 'material_categorization_level_3': 'VARCHAR(255)'
+        , 'Sheet': 'VARCHAR(255)'
+        , 'Canvas': 'VARCHAR(255)'
+        , 'Sectional': 'VARCHAR(255)'
+        , 'Item': 'VARCHAR(255)'
+        , 'nominal_size': 'FLOAT'
+        , 'size_tolerance_deviation_lower': 'FLOAT'
+        , 'size_tolerance_deviation_upper': 'FLOAT'
+        , 'tolerance': 'FLOAT'
+        , 'enclosing_cuboid_volume': 'FLOAT'
+
+    }
+    dal.add_columns_to_table('werk', dict_werk_column_name_to_type)

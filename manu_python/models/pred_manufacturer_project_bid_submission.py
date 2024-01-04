@@ -17,8 +17,6 @@ class BidSubmissionPredictor:
     _training_table_name = _input_table_name + '_training'
     _manufacturers_data_df = None
     _is_model_trained = False
-    _model_types = ['deep_v0']
-    _model_type = None
     _model = None
     _all_manufacturer_features = [
         # ## Manufacturer features
@@ -80,6 +78,7 @@ class BidSubmissionPredictor:
     def __init__(self):
         # Singles
         self._x_train_two_rows = None
+        self._list_of_relu_layer_widths = None
         self._all_used_features = self._all_manufacturer_features + self._all_project_features
         # Feature selection
         self._all_training_features = self._selected_singles + self.get_selected_double_feature_names()
@@ -93,7 +92,7 @@ class BidSubmissionPredictor:
         return ret_str
 
     def save_model(self):
-        model_name = 'model__' + self._model_type + '__' + 'T__' + self._training_table_name
+        model_name = 'model__removed_model_type__' + 'T__' + self._training_table_name
         model_save_path = STATIC_DATA_DIR_PATH + model_name + '.h5'
         self._model.save(model_save_path)
         self._manufacturers_data_df.to_parquet(STATIC_DATA_DIR_PATH + 'manufacturers_data_df.parquet')
@@ -106,7 +105,6 @@ class BidSubmissionPredictor:
         self._model = tf.keras.models.load_model(model_path)
         self._manufacturers_data_df = pd.read_parquet(STATIC_DATA_DIR_PATH + 'manufacturers_data_df.parquet')
         # extract model type from model name, the name has the format model__<model_type>__T__<training_table_name>
-        self._model_type = model_path.split('__')[1]
         self._is_model_trained = True
         self._x_train_two_rows = pd.read_parquet(STATIC_DATA_DIR_PATH + 'x_train_two_rows.parquet')
 
@@ -118,18 +116,15 @@ class BidSubmissionPredictor:
             return False
         return True
 
-    # model_types: in self._model_types
-    def build_model(self, all_tables_df, model_type, verbose=False):
-        self._model_type = model_type
+    def build_model(self, all_tables_df, verbose=False):
         if self._validate_configuration():
             # TODO: get manufactures' data from all_tables_df['wp_type_manufacturer']
-            self._manufacturers_data_df = all_tables_df[self._input_table_name][self._all_manufacturer_features].drop_duplicates()
+            self._manufacturers_data_df = all_tables_df[self._input_table_name][self._all_manufacturer_features + ['manufacturer_name']].drop_duplicates()
             all_tables_df[self._training_table_name] = self.prepare_for_fit_predict(
                 all_tables_df[self._input_table_name], verbose=verbose)
             if verbose:
                 print("Training data table name: " + self._training_table_name)
             self.train_bid_submission_predictor(training_data=all_tables_df[self._training_table_name],
-                                                model_type=model_type,
                                                 verbose=verbose)
             return self._model
 
@@ -150,14 +145,11 @@ class BidSubmissionPredictor:
         return True
 
     def model_predict(self, predict_input):
-        if self._model_type == 'deep_v0':
-            logging.info("Predicting with model: " + str(self._model))
-            return self._model.predict(predict_input, verbose=0)
-        logging.error("Shouldn't reach here, model type unkown: " + self._model_type)
-        return None
+        logging.info("Predicting with model: " + str(self._model))
+        return self._model.predict(predict_input, verbose=0)
 
     # Training data needs to contain all features, as well as target feature
-    def train_bid_submission_predictor(self, training_data, model_type, verbose=False):
+    def train_bid_submission_predictor(self, training_data, verbose=False):
         X_train = training_data.drop(columns=[self._label_column])
         y_train = training_data[self._label_column]
 
@@ -165,26 +157,20 @@ class BidSubmissionPredictor:
         # train_test_split(training_data, y_train, test_size=1, random_state=1)
 
         # train
-        if model_type is None:
-            logging.error("Model type (" + str(self._model_types) + "), not selected")
-        elif model_type not in self._model_types:
-            logging.error("Unknown model type: " + model_type + ", please select from: " + str(self._model_types))
-        elif model_type == 'deep_v0':  # Create deep model using Keras
-            model = Sequential()
-            model.add(Dense(64, activation='relu', input_dim=len(X_train.columns)))
-            model.add(Dense(32, activation='relu'))
-            model.add(Dense(1, activation='sigmoid'))
+        self._model = Sequential()
+        self._model.add(Dense(64, activation='relu', input_dim=len(X_train.columns)))
+        self._model.add(Dense(32, activation='relu'))
+        self._model.add(Dense(1, activation='sigmoid'))
 
-            # Compile the model
-            model.compile(optimizer='adam',
-                          loss='binary_crossentropy',
-                          metrics=['accuracy'])
-            if verbose:
-                print("Model: " + str(model))
-            model.fit(X_train, y_train, epochs=10, batch_size=32)
-            self._model = model
-            self._is_model_trained = True
-            self._x_train_two_rows = X_train.head(2)
+        # Compile the model
+        self._model.compile(optimizer='adam',
+                      loss='binary_crossentropy',
+                      metrics=['accuracy'])
+        if verbose:
+            print("Model: " + str(self._model))
+        self._model.fit(X_train, y_train, epochs=10, batch_size=32)
+        self._is_model_trained = True
+        self._x_train_two_rows = X_train.head(2)
 
     def predict_on_proj_manuf(self, all_tables_df, project_id, manufacturer_id, verbose=False):
         if self._is_model_trained is True:
@@ -248,6 +234,7 @@ class BidSubmissionPredictor:
             print("predict_rows columns: \n" + str(list(predict_rows.columns)))
             print("predict_rows: \n" + str(predict_rows))
         prepared_rows = self.prepare_for_fit_predict(predict_rows)
+
         if verbose:
             print("prepared_rows columns: \n" + str(list(prepared_rows.columns)))
             print("prepared_rows: \n" + str(prepared_rows))
@@ -265,8 +252,7 @@ class BidSubmissionPredictor:
 
     def enrich_with_manufacturers_features(self, project_features_map):
         row = pd.DataFrame.from_dict(project_features_map)
-        manuf_features_df = self._manufacturers_data_df
-        ret_df = row.merge(manuf_features_df, how='cross')
+        ret_df = row.merge(self._manufacturers_data_df, how='cross')
         return ret_df
 
     # def get_manuf_features_df(self, all_tables_df, use_static_data=False):
@@ -300,7 +286,7 @@ class BidSubmissionPredictor:
                 print(project_features_map)
             _, predict_rows = self.rank_manufacturers_for_project_features(project_features_map, verbose)
 
-            predict_rows = self.add_manufacturers_columns_to_predict_rows(all_tables_df, predict_rows,
+            predict_rows = self.add_manufacturers_columns_to_predict_rows(predict_rows,
                                                                           ['manufacturer_name', 'manufacture_country',
                                                                            'vendor_status'])
 
@@ -310,10 +296,11 @@ class BidSubmissionPredictor:
             ret_df = pd.concat([ret_df, predict_rows.head(max_recommendations)])
         ret_df.to_csv(csv_filename, index=False)
 
-    def add_manufacturers_columns_to_predict_rows(self, all_tables_df, predict_rows, manufacturers_extra_columns):
-        manuf_name_df = all_tables_df['wp_manufacturers'][['post_id'] + manufacturers_extra_columns]
-        predict_rows = predict_rows.merge(manuf_name_df, left_on='post_id_manuf', right_on='post_id').drop(
-            columns=['post_id'])
+    def add_manufacturers_columns_to_predict_rows(self, predict_rows, manufacturers_extra_columns):
+        manuf_name_df = self._manufacturers_data_df[['post_id_manuf'] + manufacturers_extra_columns]
+        predict_rows = predict_rows.merge(manuf_name_df, left_on='post_id_manuf', right_on='post_id_manuf')
+        print("predict rows columns:")
+        print(predict_rows.columns)
         predict_rows['separator'] = ''
         predict_rows = predict_rows[
             self._all_project_features + ['separator', 'predBidProb', 'post_id_manuf'] + manufacturers_extra_columns]

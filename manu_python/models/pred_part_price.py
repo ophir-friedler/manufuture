@@ -157,8 +157,6 @@ class PartPricePredictor:
                 predictions = self._model.predict(X_test)
                 # Calculate the ratio between actual values and predictions
                 ratio = y_test / predictions.flatten()
-                # Calculate the ratio between the predicted values and the actual values
-                ratio_inv = predictions.flatten() / y_test
                 # for each sample, take the max of the two ratios
                 ratio = ratio.apply(lambda x: max(x, 1 / x))
                 # cap ratio values at 10

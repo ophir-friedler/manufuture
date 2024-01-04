@@ -1,12 +1,10 @@
 import json
 import os
 
-import pandas as pd
 from werk24 import W24Measure
 from werk24.models.title_block import W24TitleBlock
 
 # Print all names of pdf files in a werk directory
-from manu_python.db import dal
 
 
 # process all werk results directories and write them to manufuture database werk table
@@ -161,25 +159,3 @@ def extract_title_block(full_path_page_dir):
     return title_block
 
 
-def build_werk_table():
-    dal.drop_table('werk')
-    dal.create_table('werk')
-    dict_werk_column_name_to_type = {
-        'name': 'VARCHAR(255)'
-        , 'result_dir_full_path': 'VARCHAR(255)'
-        , 'Page': 'VARCHAR(255)'
-        , 'material_categorization_level_1': 'VARCHAR(255)'
-        , 'material_categorization_level_2': 'VARCHAR(255)'
-        , 'material_categorization_level_3': 'VARCHAR(255)'
-        , 'Sheet': 'VARCHAR(255)'
-        , 'Canvas': 'VARCHAR(255)'
-        , 'Sectional': 'VARCHAR(255)'
-        , 'Item': 'VARCHAR(255)'
-        , 'nominal_size': 'FLOAT'
-        , 'size_tolerance_deviation_lower': 'FLOAT'
-        , 'size_tolerance_deviation_upper': 'FLOAT'
-        , 'tolerance': 'FLOAT'
-        , 'enclosing_cuboid_volume': 'FLOAT'
-
-    }
-    dal.add_columns_to_table('werk', dict_werk_column_name_to_type)

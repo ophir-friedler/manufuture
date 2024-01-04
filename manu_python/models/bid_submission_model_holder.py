@@ -8,7 +8,6 @@ class BidSubmissionPredictorHolder:
     _config = None
     _model = None
     _manufacturers_data_df = None
-    _model_type = None
     _x_train_two_rows = None
 
     def __init__(self, config_file_path=None):
@@ -32,7 +31,6 @@ class BidSubmissionPredictorHolder:
         self._manufacturers_data_df = pd.read_parquet(self._config['STATIC_DATA_DIR_PATH']
                                                       + self._config['MANUFACTURERS_DATA_DF_FILE_NAME'])
         # extract model type from model name, the name has the format model__<model_type>__T__<training_table_name>
-        self._model_type = self._config['MODEL_FILE_NAME'].split('__')[1]
         self._x_train_two_rows = pd.read_parquet(self._config['STATIC_DATA_DIR_PATH'] + self._config['X_TRAIN_TWO_ROWS_FILE_NAME'])
 
     def enrich_with_manufacturers_features(self, project_features_map):

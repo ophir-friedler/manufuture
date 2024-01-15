@@ -213,7 +213,8 @@ MYSQL_MANUFUTURE_DB = 'manufuture'
 MYSQL_HOST = 'localhost'
 
 WERK_START_DIR = "/Users/ofriedler/Data/manufuture_data/werk_data/"
-STATIC_DATA_DIR_PATH = './manu_python/static_data/'
+PROJECT_DIR_PATH = '/Users/ofriedler/Dropbox/Work/Consultation/Manufuture/dev/manufuture/'
+STATIC_DATA_DIR_PATH = PROJECT_DIR_PATH + '/manu_python/static_data/'
 MIN_NUM_BIDS_PER_MANUFACTURER = 4
 MANUFACTURER_BID_LABEL_COLUMN_NAME = 'is_manuf_bid'
 PART_NETSUITE_MEAN_PRICE_COLUMN_NAME = 'Rate mean_netsuite'

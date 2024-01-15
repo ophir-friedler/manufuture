@@ -35,8 +35,7 @@ class BidSubmissionPredictorHolder:
 
     def enrich_with_manufacturers_features(self, project_features_map):
         row = pd.DataFrame.from_dict(project_features_map)
-        manuf_features_df = self._manufacturers_data_df
-        ret_df = row.merge(manuf_features_df, how='cross')
+        ret_df = row.merge(self._manufacturers_data_df, how='cross')
         return ret_df
 
     def do_all_features_exist(self, columns):
@@ -71,7 +70,7 @@ class BidSubmissionPredictorHolder:
             for categorical_feature in self._categorical_features:
                 if categorical_feature in ret_df.columns:
                     ret_df = pd.concat([ret_df, pd.get_dummies(ret_df[categorical_feature],
-                                                               prefix=categorical_feature)],
+                                                               prefix=categorical_feature, dtype=int)],
                                        axis=1).drop(columns=[categorical_feature])
             ret_df = self.complete_columns_with_negatives(prepared_data=ret_df)
             return ret_df
@@ -93,7 +92,7 @@ class BidSubmissionPredictorHolder:
         prepared_rows['predBidProb'] = predictions_arr
         predict_rows['predBidProb'] = predictions_arr
 
-        return prepared_rows, predict_rows.sort_values(by=['predBidProb'], ascending=False)
+        return prepared_rows, predict_rows
 
     def prepare_doubles(self, raw_data):
         for [column_a, column_b] in self._selected_doubles:

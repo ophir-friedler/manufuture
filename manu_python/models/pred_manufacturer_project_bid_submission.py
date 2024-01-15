@@ -17,6 +17,7 @@ class BidSubmissionPredictor:
     _training_table_name = _input_table_name + '_training'
     _manufacturers_data_df = None
     _is_model_trained = False
+    _last_neuron_function = 'sigmoid'
     _model = None
     _all_manufacturer_features = [
         # ## Manufacturer features
@@ -77,6 +78,7 @@ class BidSubmissionPredictor:
 
     def __init__(self):
         # Singles
+        self._model_input_columns = None
         self._x_train_two_rows = None
         self._list_of_relu_layer_widths = None
         self._all_used_features = self._all_manufacturer_features + self._all_project_features
@@ -116,16 +118,48 @@ class BidSubmissionPredictor:
             return False
         return True
 
-    def build_model(self, all_tables_df, verbose=False):
+    def build_model_instance(self, input_dim, list_of_relu_layer_widths):
+        model = Sequential()
+        model.add(Dense(list_of_relu_layer_widths[0], activation='relu', input_dim=input_dim))
+        for layer_width in list_of_relu_layer_widths[1:]:
+            model.add(Dense(layer_width, activation='relu'))
+        model.add(Dense(1, activation=self._last_neuron_function))
+        return model
+
+    def build_model(self, all_tables_df, list_of_relu_layer_widths, epochs, batch_size,  verbose=False):
+        # TODO: get manufactures' data from all_tables_df['wp_type_manufacturer']
+        self._manufacturers_data_df = all_tables_df[self._input_table_name][self._all_manufacturer_features + ['manufacturer_name']].drop_duplicates()
+
+        self._list_of_relu_layer_widths = list_of_relu_layer_widths
         if self._validate_configuration():
-            # TODO: get manufactures' data from all_tables_df['wp_type_manufacturer']
-            self._manufacturers_data_df = all_tables_df[self._input_table_name][self._all_manufacturer_features + ['manufacturer_name']].drop_duplicates()
             all_tables_df[self._training_table_name] = self.prepare_for_fit_predict(
                 all_tables_df[self._input_table_name], verbose=verbose)
             if verbose:
                 print("Training data table name: " + self._training_table_name)
-            self.train_bid_submission_predictor(training_data=all_tables_df[self._training_table_name],
-                                                verbose=verbose)
+            data = all_tables_df[self._training_table_name]
+            X_train = data.drop(columns=[self._label_column])
+            y_train = data[self._label_column]
+            self._x_train_two_rows = X_train.head(2)
+            self._model_input_columns = {column_name: column_index for column_index, column_name in enumerate(X_train.columns)}
+
+            input_dim = len(X_train.columns)
+
+            # validate model instance data
+            if list_of_relu_layer_widths is None or len(list_of_relu_layer_widths) == 0 or input_dim == 0:
+                logging.error("Model instance shape (input_dim: " +str(input_dim) + ", layers: " + str(list_of_relu_layer_widths) + "), problematic")
+                return None
+
+            self._model = self.build_model_instance(input_dim, list_of_relu_layer_widths)
+
+            # Compile the model
+            self._model.compile(optimizer='adam',
+                                loss='binary_crossentropy',
+                                metrics=['accuracy'])
+            if verbose:
+                print("Model: " + str(self._model))
+            self._model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size)
+            self._is_model_trained = True
+
             return self._model
 
     def get_selected_double_feature_names(self):
@@ -147,30 +181,6 @@ class BidSubmissionPredictor:
     def model_predict(self, predict_input):
         logging.info("Predicting with model: " + str(self._model))
         return self._model.predict(predict_input, verbose=0)
-
-    # Training data needs to contain all features, as well as target feature
-    def train_bid_submission_predictor(self, training_data, verbose=False):
-        X_train = training_data.drop(columns=[self._label_column])
-        y_train = training_data[self._label_column]
-
-        # shuffling
-        # train_test_split(training_data, y_train, test_size=1, random_state=1)
-
-        # train
-        self._model = Sequential()
-        self._model.add(Dense(64, activation='relu', input_dim=len(X_train.columns)))
-        self._model.add(Dense(32, activation='relu'))
-        self._model.add(Dense(1, activation='sigmoid'))
-
-        # Compile the model
-        self._model.compile(optimizer='adam',
-                      loss='binary_crossentropy',
-                      metrics=['accuracy'])
-        if verbose:
-            print("Model: " + str(self._model))
-        self._model.fit(X_train, y_train, epochs=10, batch_size=32)
-        self._is_model_trained = True
-        self._x_train_two_rows = X_train.head(2)
 
     def predict_on_proj_manuf(self, all_tables_df, project_id, manufacturer_id, verbose=False):
         if self._is_model_trained is True:
@@ -350,7 +360,7 @@ class BidSubmissionPredictor:
             for categorical_feature in self._categorical_features:
                 if categorical_feature in ret_df.columns:
                     ret_df = pd.concat([ret_df, pd.get_dummies(ret_df[categorical_feature],
-                                                               prefix=categorical_feature)],
+                                                               prefix=categorical_feature, dtype=int)],
                                        axis=1).drop(columns=[categorical_feature])
             ret_df = self.complete_columns_with_negatives(prepared_data=ret_df)
             return ret_df

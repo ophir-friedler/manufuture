@@ -18,8 +18,8 @@ class PartPricePredictor:
     _categorical_features = None
     _input_table_name = 'part_price_training_table'
     _training_table_name = _input_table_name + '_training'
-    # _manufacturers_data_df = None
     _is_model_trained = False
+    _last_neuron_function = 'linear'
     _model = None
 
     _all_part_features = [
@@ -137,7 +137,7 @@ class PartPricePredictor:
 
             input_dim = len(X_train.columns)
 
-            # validate train data
+            # validate model instance data
             if list_of_relu_layer_widths is None or len(list_of_relu_layer_widths) == 0 or input_dim == 0:
                 logging.error("Model instance shape (input_dim: " +str(input_dim) + ", layers: " + str(list_of_relu_layer_widths) + "), problematic")
                 return None
@@ -197,7 +197,7 @@ class PartPricePredictor:
         model.add(Dense(list_of_relu_layer_widths[0], activation='relu', input_dim=input_dim))
         for layer_width in list_of_relu_layer_widths[1:]:
             model.add(Dense(layer_width, activation='relu'))
-        model.add(Dense(1, activation='linear'))
+        model.add(Dense(1, activation=self._last_neuron_function))
         return model
 
     # Predict price for a single part based on its features

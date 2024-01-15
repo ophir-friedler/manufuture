@@ -5,6 +5,9 @@ mysql-connector-python==8.2.0
 SQLAlchemy
 sqlalchemy==2.0.25
 phpserialize==1.3
-werk24==1.8.3
+werk24==1.7.0
 seaborn==0.13.1
 scikit-learn==1.3.2
+pyarrow==14.0.2
+fastparquet==2023.10.1
+pymysql==1.1.0

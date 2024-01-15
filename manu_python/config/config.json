@@ -1,6 +1,6 @@
 {
   "STATIC_DATA_DIR_PATH": "./manu_python/static_data/",
-  "MODEL_FILE_NAME": "model__deep_v0__T__experiment_1_training_data.h5",
+  "MODEL_FILE_NAME": "model__removed_model_type__T__pam_project_active_manufacturer_th_4_label_reqs_training.h5",
   "MANUFACTURERS_DATA_DF_FILE_NAME": "manufacturers_data_df.parquet",
   "X_TRAIN_TWO_ROWS_FILE_NAME": "x_train_two_rows.parquet",
   "_MODEL_INPUT_COLUMNS_FILE_NAME": "model_input_columns.parquet",

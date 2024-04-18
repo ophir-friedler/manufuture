@@ -30,7 +30,6 @@ class BidSubmissionPredictorHolder:
         self._model = tf.keras.models.load_model(self._config['STATIC_DATA_DIR_PATH'] + self._config['MODEL_FILE_NAME'])
         self._manufacturers_data_df = pd.read_parquet(self._config['STATIC_DATA_DIR_PATH']
                                                       + self._config['MANUFACTURERS_DATA_DF_FILE_NAME'])
-        # extract model type from model name, the name has the format model__<model_type>__T__<training_table_name>
         self._x_train_two_rows = pd.read_parquet(self._config['STATIC_DATA_DIR_PATH'] + self._config['X_TRAIN_TWO_ROWS_FILE_NAME'])
 
     def enrich_with_manufacturers_features(self, project_features_map):

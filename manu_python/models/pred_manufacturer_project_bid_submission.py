@@ -94,7 +94,7 @@ class BidSubmissionPredictor:
         return ret_str
 
     def save_model(self):
-        model_name = 'model__removed_model_type__' + 'T__' + self._training_table_name
+        model_name = 'model__' + 'T__' + self._training_table_name
         model_save_path = STATIC_DATA_DIR_PATH + model_name + '.h5'
         self._model.save(model_save_path)
         self._manufacturers_data_df.to_parquet(STATIC_DATA_DIR_PATH + 'manufacturers_data_df.parquet')
@@ -106,7 +106,6 @@ class BidSubmissionPredictor:
     def load_model(self, model_path):
         self._model = tf.keras.models.load_model(model_path)
         self._manufacturers_data_df = pd.read_parquet(STATIC_DATA_DIR_PATH + 'manufacturers_data_df.parquet')
-        # extract model type from model name, the name has the format model__<model_type>__T__<training_table_name>
         self._is_model_trained = True
         self._x_train_two_rows = pd.read_parquet(STATIC_DATA_DIR_PATH + 'x_train_two_rows.parquet')
 
